@@ -73,7 +73,8 @@ def elegir_dispositivo(pedido: str = "auto") -> tuple[str, str]:
 class Listener:
     def __init__(self, model_size: str = "small", busy: threading.Event | None = None,
                  umbral: float = 4.0, pausado: threading.Event | None = None,
-                 silencio_final: float = 0.65, dispositivo: str = "auto"):
+                 silencio_final: float = 0.65, dispositivo: str = "auto",
+                 on_level=None):
         from faster_whisper import WhisperModel  # import tardío: es pesado
 
         device, compute = elegir_dispositivo(dispositivo)
@@ -88,6 +89,7 @@ class Listener:
         self.umbral_factor = umbral
         self.silencio_final = silencio_final
         self.umbral = 0.0
+        self.on_level = on_level     # para que la interfaz dibuje la onda
         self.q: "queue.Queue" = queue.Queue()
         self._precalentar()
         log.info("Whisper listo en %.1f s", time.monotonic() - t0)
@@ -131,7 +133,7 @@ class Listener:
 
             preroll = deque(maxlen=10)
             speech: list = []
-            hablando, silencio, fuerte = False, 0, 0
+            hablando, silencio, fuerte, cuenta = False, 0, 0, 0
             fin_silencio = max(8, int(self.silencio_final * SAMPLE_RATE / BLOCK))
             max_bloques = int(12 * SAMPLE_RATE / BLOCK)
 
@@ -146,6 +148,12 @@ class Listener:
                     silencio = fuerte = 0
                     continue
                 nivel = self._rms(block)
+                cuenta += 1
+                if self.on_level and cuenta % 4 == 0:   # ~8 veces por segundo, no más
+                    try:
+                        self.on_level(nivel / (self.umbral * 3.2))
+                    except Exception:
+                        pass
                 if not hablando:
                     preroll.append(block)
                     # 3 bloques fuertes seguidos: un chasquido suelto no alcanza

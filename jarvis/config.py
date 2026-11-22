@@ -34,7 +34,11 @@ DEFAULT_CONFIG = {
     "followup_seconds": 6,
     # Cuánto más fuerte que el ruido de fondo tiene que ser tu voz. Subilo si se activa solo.
     "umbral_voz": 4.0,
-    "hud": True,           # ventana con el estado
+    # Interfaz: "web" (la linda, en el navegador), "ventana" (simple, tkinter) o "ninguna"
+    "interfaz": "web",
+    "puerto": 8777,
+    "abrir_al_arrancar": True,
+    "hud": True,           # ventana con el estado (solo si interfaz = "ventana")
     "bandeja": True,       # ícono al lado del reloj
     "sonidos": True,       # pitido corto al activarse
     # Voz: "auto" usa Piper si está el modelo, si no la de Windows.

@@ -68,14 +68,48 @@ Los pendientes quedan en `%LOCALAPPDATA%\Jarvis\pendientes.json`.
 
 ---
 
-## 3. La ventana y el ícono
+## 3. La interfaz
 
-Al arrancar se abre una ventana chica que muestra el estado (escuchando, procesando,
-hablando), lo último que te escuchó y qué hizo. Sirve para ver por qué no entendió algo.
+Al arrancar, Jarvis abre su propia interfaz en el navegador. Es una página que sirve él
+mismo, **en tu PC**: no sale a internet y nadie más la puede ver.
 
-- Botón **Pausar** para que deje de escuchar, **Ocultar** para sacarla de encima.
-- Queda un **ícono al lado del reloj**: clic para pausar o reanudar, clic derecho para el menú.
-- Si no querés ventana: `python -m jarvis --sin-hud`, o `"hud": false` en `config.json`.
+```
+  ┌──────────────────────────────────────────────────────┐
+  │ J.A.R.V.I.S.   ● escuchando                   00:42  │
+  ├──────────┬───────────────────────────────────────────┤
+  │ Monitor  │        ╭───────────╮      Pendientes      │
+  │ Pendient.│        │  reactor  │      1 entregar TP   │
+  │ Registro │        ╰───────────╯      2 comprar cable │
+  │ Órdenes  │     ▁▃▅█▇▅▃▁ onda en vivo                 │
+  │          │     TE ESCUCHÉ: abrí brave                │
+  │ oído ·   │                           Sistema         │
+  │ cerebro ·│                           whisper · small │
+  ├──────────┴───────────────────────────────────────────┤
+  │ Escribile una orden…            [Pausar]  [Salir]    │
+  └──────────────────────────────────────────────────────┘
+```
+
+- El **reactor y la onda** se mueven con tu voz de verdad: la barra central reacciona al
+  nivel del micrófono, y todo cambia de color según el estado (cian escuchando, ámbar
+  pensando, verde hablando, gris en pausa).
+- **Monitor**: lo último que te escuchó, tus pendientes y qué motores está usando.
+- **Pendientes**: la lista, con un ✓ para marcar cada uno como hecho.
+- **Registro**: todo lo que pasó en la sesión.
+- **Órdenes**: la lista de lo que podés decir, por si te olvidás.
+- Abajo podés **escribirle** una orden en vez de hablarla: hace exactamente lo mismo.
+- Queda un **ícono al lado del reloj** para pausar o cerrar sin buscar la ventana.
+
+Se abre como ventana propia (sin barra de direcciones) si tenés Brave, Chrome o Edge.
+
+**Seguridad.** El servidor escucha solo en `127.0.0.1`, así que no se ve desde otra
+computadora. Además, cada arranque genera un código al azar que va en la dirección: sin
+ese código no se puede ni mirar el estado ni mandarle órdenes, ni siquiera desde tu
+propia PC.
+
+Si preferís otra cosa, en `config.json`:
+`"interfaz": "ventana"` (una ventana simple de tkinter) o `"interfaz": "ninguna"`.
+Para que no se abra sola al arrancar: `"abrir_al_arrancar": false`.
+La dirección queda siempre en la consola y en el log.
 
 ---
 
@@ -225,6 +259,7 @@ ruta completa al `.exe`. El clima sale de Open-Meteo, que es gratis y no pide cl
 | Va lento | `python -m jarvis --banco` y seguí lo que te diga |
 | La voz suena femenina | corré `voz_natural.bat` y elegí la 1 |
 | No arranca con Windows | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 estado` |
+| No se abre la interfaz | mirá la dirección en la consola y pegala en el navegador |
 | Querés sacar el autoarranque | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 quitar` |
 | Quiero ver qué pasó | `notepad %LOCALAPPDATA%\Jarvis\jarvis.log` |
 
@@ -242,7 +277,8 @@ El log anota lo que escuchó, lo que descartó por ruido y cada acción. Si algo
 | `jarvis/assistant.py` | palabra de activación, ventana de seguimiento, confirmaciones |
 | `jarvis/actions.py` | ejecuta las intenciones en Windows |
 | `jarvis/tasks.py` | clima, pendientes, empleo, facultad |
-| `jarvis/hud.py` / `tray.py` | ventana de estado e ícono del reloj |
+| `jarvis/webui.py` + `web/index.html` | la interfaz: servidor local y página |
+| `jarvis/hud.py` / `tray.py` | ventana simple de respaldo e ícono del reloj |
 | `jarvis/speaker.py` | voz (Piper o Windows) y pitidos |
 | `jarvis/bench.py` | el banco de pruebas de velocidad |
 

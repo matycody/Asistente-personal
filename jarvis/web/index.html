@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J.A.R.V.I.S.</title>
+<style>
+:root{
+  --bg:#04070c; --bg2:#070c14; --panel:rgba(14,22,34,.72); --linea:rgba(94,234,255,.14);
+  --txt:#dbe9f4; --tenue:#7892a8; --cian:#22d3ee; --ambar:#f59e0b;
+  --verde:#34d399; --gris:#64748b; --rojo:#f87171;
+  --acento:var(--cian);
+  --mono:ui-monospace,"JetBrains Mono","Cascadia Code",Consolas,monospace;
+  --sans:"Segoe UI",system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--txt); font-family:var(--sans); overflow:hidden;
+  background-image:
+    radial-gradient(1100px 700px at 50% -10%, rgba(34,211,238,.09), transparent 60%),
+    radial-gradient(800px 600px at 110% 110%, rgba(245,158,11,.05), transparent 60%),
+    linear-gradient(rgba(94,234,255,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94,234,255,.035) 1px, transparent 1px);
+  background-size:auto,auto,46px 46px,46px 46px;
+}
+.app{display:grid;grid-template-columns:212px 1fr;grid-template-rows:56px 1fr 62px;height:100vh;gap:0}
+
+/* ---------- barra superior ---------- */
+header{
+  grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:0 20px;
+  border-bottom:1px solid var(--linea);backdrop-filter:blur(8px);background:rgba(4,7,12,.6);
+}
+.marca{font-family:var(--mono);font-size:15px;letter-spacing:.42em;color:var(--acento);
+  text-shadow:0 0 18px color-mix(in srgb,var(--acento) 55%,transparent);font-weight:600}
+.chip{
+  display:flex;align-items:center;gap:8px;padding:5px 13px;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--acento) 42%,transparent);
+  background:color-mix(in srgb,var(--acento) 9%,transparent);
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.17em;text-transform:uppercase;
+  color:var(--acento);
+}
+.chip .pt{width:7px;height:7px;border-radius:50%;background:var(--acento);
+  box-shadow:0 0 10px var(--acento);animation:latido 1.9s ease-in-out infinite}
+@keyframes latido{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.72)}}
+.sep{flex:1}
+.reloj{font-family:var(--mono);font-size:19px;letter-spacing:.06em}
+.fecha{font-size:10.5px;color:var(--tenue);text-transform:capitalize;text-align:right}
+
+/* ---------- barra lateral ---------- */
+nav{border-right:1px solid var(--linea);padding:16px 10px;display:flex;flex-direction:column;gap:3px;
+  background:rgba(6,10,17,.45)}
+nav button{
+  display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border:0;border-radius:9px;
+  background:transparent;color:var(--tenue);font-family:var(--sans);font-size:13px;cursor:pointer;
+  text-align:left;transition:.16s;border-left:2px solid transparent;
+}
+nav button:hover{background:rgba(94,234,255,.06);color:var(--txt)}
+nav button.on{background:color-mix(in srgb,var(--acento) 12%,transparent);color:var(--acento);
+  border-left-color:var(--acento)}
+nav button svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7}
+nav .tit{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--tenue);
+  padding:14px 12px 6px;opacity:.65}
+.motores{margin-top:auto;padding:10px 12px;font-family:var(--mono);font-size:9.5px;
+  color:var(--tenue);line-height:1.9;border-top:1px solid var(--linea)}
+.motores b{color:var(--txt);font-weight:500}
+
+/* ---------- contenido ---------- */
+main{overflow:auto;padding:22px 26px;scrollbar-width:thin;scrollbar-color:var(--linea) transparent}
+main::-webkit-scrollbar{width:8px}
+main::-webkit-scrollbar-thumb{background:var(--linea);border-radius:4px}
+.vista{display:none;animation:entra .22s ease}
+.vista.on{display:block}
+@keyframes entra{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.grid{display:grid;grid-template-columns:1fr 310px;gap:20px;align-items:start}
+@media(max-width:1080px){.grid{grid-template-columns:1fr}.app{grid-template-columns:62px 1fr}
+  nav button span,.motores,nav .tit{display:none}nav button{justify-content:center}}
+
+.tarjeta{border:1px solid var(--linea);border-radius:14px;background:var(--panel);
+  backdrop-filter:blur(10px);padding:16px 18px}
+.tarjeta h2{font-family:var(--mono);font-size:9.5px;letter-spacing:.21em;color:var(--tenue);
+  text-transform:uppercase;margin-bottom:12px;font-weight:600}
+
+/* ---------- reactor ---------- */
+.escena{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:14px 0 6px;min-height:290px}
+.reactor{position:relative;width:216px;height:216px}
+.reactor svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.anillo{fill:none;stroke:var(--acento);transition:stroke .4s}
+.r1{stroke-opacity:.9;stroke-width:1.6;stroke-dasharray:34 13;transform-origin:50% 50%;
+  animation:giro 15s linear infinite}
+.r2{stroke-opacity:.42;stroke-width:1;stroke-dasharray:4 11;transform-origin:50% 50%;
+  animation:giro 26s linear infinite reverse}
+.r3{stroke-opacity:.2;stroke-width:1}
+@keyframes giro{to{transform:rotate(360deg)}}
+.nucleo{position:absolute;inset:0;display:grid;place-items:center}
+.nucleo i{
+  display:block;width:74px;height:74px;border-radius:50%;
+  background:radial-gradient(circle at 50% 42%, #fff 2%, var(--acento) 34%, transparent 71%);
+  filter:blur(.4px);
+  transform:scale(calc(.82 + var(--n,0) * .4));
+  opacity:calc(.6 + var(--n,0) * .4);
+  transition:transform .09s ease-out, opacity .09s;
+}
+.halo{position:absolute;inset:-26px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle, color-mix(in srgb,var(--acento) 22%,transparent) 0%, transparent 64%);
+  opacity:calc(.3 + var(--n,0) * .7);transition:opacity .12s}
+#onda{width:min(560px,92%);height:62px;margin-top:4px;display:block}
+
+.oido{text-align:center;margin-top:8px;min-height:62px}
+.oido .et{font-family:var(--mono);font-size:9px;letter-spacing:.23em;color:var(--tenue)}
+.oido .tx{font-size:21px;margin-top:7px;line-height:1.35;min-height:29px}
+.oido .tx.vacio{color:var(--gris);font-size:15px}
+
+/* ---------- listas ---------- */
+.reg{font-family:var(--mono);font-size:11.5px;line-height:1.95;max-height:330px;overflow:auto}
+.reg div{display:flex;gap:9px;padding:1px 0;animation:entra .2s}
+.reg .h{color:var(--gris);flex:none}
+.reg .yo{color:var(--txt)}
+.reg .j{color:var(--acento)}
+.reg .s{color:var(--tenue)}
+.vacio{color:var(--gris);font-size:12.5px;font-style:italic}
+ul.pend{list-style:none;display:flex;flex-direction:column;gap:7px}
+ul.pend li{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.45;
+  padding:9px 11px;border-radius:9px;background:rgba(94,234,255,.045);
+  border:1px solid rgba(94,234,255,.09)}
+ul.pend .n{font-family:var(--mono);font-size:10px;color:var(--acento);
+  background:color-mix(in srgb,var(--acento) 15%,transparent);border-radius:5px;
+  padding:2px 6px;flex:none;margin-top:1px}
+ul.pend button{margin-left:auto;background:0;border:0;color:var(--gris);cursor:pointer;
+  font-size:14px;padding:0 3px;flex:none}
+ul.pend button:hover{color:var(--verde)}
+.datos{display:flex;flex-direction:column;gap:9px;font-size:12.5px}
+.datos div{display:flex;justify-content:space-between;gap:10px}
+.datos span:first-child{color:var(--tenue)}
+.datos span:last-child{font-family:var(--mono);font-size:11.5px;text-align:right}
+table.ayuda{width:100%;border-collapse:collapse;font-size:13px}
+table.ayuda td{padding:8px 10px;border-bottom:1px solid rgba(94,234,255,.07);vertical-align:top}
+table.ayuda td:first-child{color:var(--acento);font-family:var(--mono);font-size:11.5px;
+  white-space:nowrap;width:1%;padding-right:20px}
+table.ayuda tr:last-child td{border:0}
+
+/* ---------- barra inferior ---------- */
+footer{grid-column:1/-1;display:flex;align-items:center;gap:11px;padding:0 20px;
+  border-top:1px solid var(--linea);background:rgba(4,7,12,.72);backdrop-filter:blur(8px)}
+footer form{flex:1;display:flex;gap:9px}
+footer input{
+  flex:1;background:rgba(94,234,255,.05);border:1px solid var(--linea);border-radius:9px;
+  padding:10px 14px;color:var(--txt);font-family:var(--sans);font-size:13.5px;outline:none;transition:.16s}
+footer input:focus{border-color:color-mix(in srgb,var(--acento) 55%,transparent);
+  background:rgba(94,234,255,.09)}
+footer input::placeholder{color:var(--gris)}
+.btn{background:rgba(94,234,255,.07);border:1px solid var(--linea);color:var(--txt);
+  border-radius:9px;padding:10px 16px;font-size:12.5px;cursor:pointer;transition:.16s;
+  font-family:var(--sans);white-space:nowrap}
+.btn:hover{background:rgba(94,234,255,.15);border-color:var(--acento)}
+.btn.rojo{color:var(--rojo);border-color:rgba(248,113,113,.26)}
+.btn.rojo:hover{background:rgba(248,113,113,.14);border-color:var(--rojo)}
+.demo{position:fixed;bottom:74px;right:20px;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.16em;color:var(--ambar);border:1px solid rgba(245,158,11,.33);
+  background:rgba(245,158,11,.09);padding:5px 11px;border-radius:999px;display:none}
+.demo.on{display:block}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <div class="marca">J.A.R.V.I.S.</div>
+  <div class="chip"><span class="pt"></span><span id="estado">iniciando</span></div>
+  <div class="sep"></div>
+  <div><div class="reloj" id="reloj">--:--</div><div class="fecha" id="fecha"></div></div>
+</header>
+
+<nav>
+  <div class="tit">PANEL</div>
+  <button class="on" data-v="panel">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/></svg>
+    <span>Monitor</span></button>
+  <button data-v="pend">
+    <svg viewBox="0 0 24 24"><path d="M9 11l2.5 2.5L16 8"/><rect x="3.5" y="4" width="17" height="16" rx="2.5"/></svg>
+    <span>Pendientes</span></button>
+  <button data-v="reg">
+    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+    <span>Registro</span></button>
+  <div class="tit">AYUDA</div>
+  <button data-v="ordenes">
+    <svg viewBox="0 0 24 24"><path d="M12 18.5a6.5 6.5 0 0 0 6.5-6.5V8a6.5 6.5 0 0 0-13 0v4a6.5 6.5 0 0 0 6.5 6.5zM12 18.5V22"/></svg>
+    <span>Órdenes</span></button>
+  <div class="motores">
+    <div>oído · <b id="m-whisper">—</b></div>
+    <div>cerebro · <b id="m-llm">—</b></div>
+    <div>voz · <b id="m-voz">—</b></div>
+  </div>
+</nav>
+
+<main>
+  <!-- ---------- monitor ---------- -->
+  <section class="vista on" id="v-panel">
+    <div class="grid">
+      <div>
+        <div class="tarjeta">
+          <div class="escena">
+            <div class="reactor">
+              <div class="halo"></div>
+              <svg viewBox="0 0 200 200">
+                <circle class="anillo r1" cx="100" cy="100" r="92"/>
+                <circle class="anillo r2" cx="100" cy="100" r="76"/>
+                <circle class="anillo r3" cx="100" cy="100" r="60"/>
+              </svg>
+              <div class="nucleo"><i></i></div>
+            </div>
+            <canvas id="onda"></canvas>
+          </div>
+          <div class="oido">
+            <div class="et">TE ESCUCHÉ</div>
+            <div class="tx vacio" id="oido">decí «Jarvis» para empezar</div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="tarjeta">
+          <h2>Pendientes</h2>
+          <ul class="pend" id="pend-mini"></ul>
+          <div class="vacio" id="pend-mini-v">Sin pendientes.</div>
+        </div>
+        <div class="tarjeta">
+          <h2>Sistema</h2>
+          <div class="datos" id="datos"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- pendientes ---------- -->
+  <section class="vista" id="v-pend">
+    <div class="tarjeta">
+      <h2>Tus pendientes</h2>
+      <ul class="pend" id="pend"></ul>
+      <div class="vacio" id="pend-v">No tenés pendientes. Decí «Jarvis, anotá que…» o escribilo abajo.</div>
+    </div>
+  </section>
+
+  <!-- ---------- registro ---------- -->
+  <section class="vista" id="v-reg">
+    <div class="tarjeta">
+      <h2>Registro de la sesión</h2>
+      <div class="reg" id="reg" style="max-height:none"></div>
+    </div>
+  </section>
+
+  <!-- ---------- órdenes ---------- -->
+  <section class="vista" id="v-ordenes">
+    <div class="grid">
+      <div class="tarjeta">
+        <h2>Lo que podés decir</h2>
+        <table class="ayuda"><tbody>
+          <tr><td>abrí brave</td><td>abre una app, carpeta o sitio</td></tr>
+          <tr><td>entrá al disco H</td><td>abre una unidad</td></tr>
+          <tr><td>buscá …</td><td>busca en Google o en YouTube</td></tr>
+          <tr><td>buenos días</td><td>fecha, clima y pendientes</td></tr>
+          <tr><td>anotá que …</td><td>guarda un pendiente</td></tr>
+          <tr><td>listo el dos</td><td>marca un pendiente como hecho</td></tr>
+          <tr><td>buscá empleo</td><td>abre tus búsquedas guardadas</td></tr>
+          <tr><td>modo facultad</td><td>abre tus sitios y carpetas de cursada</td></tr>
+          <tr><td>subí el volumen</td><td>volumen, pausa, silencio, siguiente</td></tr>
+          <tr><td>minimizá todo</td><td>ventanas y captura de pantalla</td></tr>
+          <tr><td>bloqueá la PC</td><td>bloquea la sesión</td></tr>
+          <tr><td>apagá la PC</td><td>pide que digas «confirmo»</td></tr>
+        </tbody></table>
+      </div>
+      <div class="tarjeta">
+        <h2>Cómo hablarle</h2>
+        <p style="font-size:13px;line-height:1.75;color:var(--tenue)">
+          Empezá con <b style="color:var(--acento)">«Jarvis»</b>. Un pitido corto te avisa que
+          te escuchó. Después de una orden sigue atento unos segundos, así podés encadenar sin
+          repetir el nombre.<br><br>
+          Si decís algo que no está en la lista, se lo pasa al modelo local y hace lo que pueda
+          con las mismas acciones. Nunca ejecuta comandos sueltos.
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <form id="f">
+    <input id="orden" placeholder="Escribile una orden…  (ej: abrí brave y entrá al disco H)"
+           autocomplete="off">
+    <button class="btn" type="submit">Enviar</button>
+  </form>
+  <button class="btn" id="b-pausa">Pausar</button>
+  <button class="btn rojo" id="b-salir">Salir</button>
+</footer>
+</div>
+<div class="demo" id="demo">MODO DEMOSTRACIÓN</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const TOKEN = new URLSearchParams(location.search).get('t') || '';
+const COLOR = {escuchando:'--cian', procesando:'--ambar', hablando:'--verde',
+               'en pausa':'--gris', iniciando:'--gris', error:'--rojo'};
+let modo = 'iniciando', nivel = 0, pausado = false, demo = false;
+
+/* ---------- reloj ---------- */
+const DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
+             'septiembre','octubre','noviembre','diciembre'];
+setInterval(()=>{
+  const d=new Date();
+  $('#reloj').textContent=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  $('#fecha').textContent=`${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`;
+},1000);
+
+/* ---------- navegación ---------- */
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.vista').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); $('#v-'+b.dataset.v).classList.add('on');
+});
+
+/* ---------- estado ---------- */
+function setModo(m){
+  modo = m;
+  $('#estado').textContent = m;
+  document.documentElement.style.setProperty('--acento', `var(${COLOR[m]||'--cian'})`);
+  $('#b-pausa').textContent = (m === 'en pausa') ? 'Reanudar' : 'Pausar';
+}
+function setOido(t){
+  const e = $('#oido');
+  e.textContent = t || 'decí «Jarvis» para empezar';
+  e.classList.toggle('vacio', !t);
+}
+function log(clase, texto){
+  const d = document.createElement('div');
+  const h = new Date().toTimeString().slice(0,5);
+  d.innerHTML = `<span class="h">${h}</span><span class="${clase}"></span>`;
+  d.lastChild.textContent = texto;
+  $('#reg').appendChild(d);
+  $('#reg').scrollTop = 1e9;
+}
+function setPendientes(lista){
+  for(const [ul, vacio, max] of [[$('#pend'), $('#pend-v'), 99],
+                                 [$('#pend-mini'), $('#pend-mini-v'), 4]]){
+    ul.innerHTML = '';
+    lista.slice(0, max).forEach((p, i) => {
+      const li = document.createElement('li');
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = i+1;
+      const t = document.createElement('span'); t.textContent = p;
+      const b = document.createElement('button'); b.textContent = '✓'; b.title = 'marcar como hecho';
+      b.onclick = () => enviar(`jarvis listo el ${i+1}`);
+      li.append(n, t, b); ul.appendChild(li);
+    });
+    vacio.style.display = lista.length ? 'none' : 'block';
+  }
+}
+function setInfo(info){
+  $('#m-whisper').textContent = info.whisper || '—';
+  $('#m-llm').textContent = info.llm || '—';
+  $('#m-voz').textContent = info.voz || '—';
+  $('#datos').innerHTML = '';
+  for(const [k,v] of Object.entries(info.detalle||{})){
+    const d=document.createElement('div');
+    const a=document.createElement('span'); a.textContent=k;
+    const b=document.createElement('span'); b.textContent=v;
+    d.append(a,b); $('#datos').appendChild(d);
+  }
+}
+
+/* ---------- onda ---------- */
+const cv = $('#onda'), cx = cv.getContext('2d');
+const N = 56, alturas = new Array(N).fill(0);
+function dibujar(t){
+  const w = cv.clientWidth, h = cv.clientHeight, dpr = devicePixelRatio || 1;
+  if(cv.width !== w*dpr){ cv.width = w*dpr; cv.height = h*dpr; }
+  cx.setTransform(dpr,0,0,dpr,0,0); cx.clearRect(0,0,w,h);
+  const col = getComputedStyle(document.documentElement)
+                .getPropertyValue(COLOR[modo]||'--cian').trim() || '#22d3ee';
+  const bw = w/N, mitad = h/2;
+  for(let i=0;i<N;i++){
+    const d = Math.abs(i-(N-1)/2)/((N-1)/2);       // 0 centro, 1 bordes
+    const sobre = 1 - d*d*0.82;
+    let obj;
+    if(modo==='hablando')       obj = (0.3+0.7*Math.abs(Math.sin(t/160 + i/3.1)))*sobre;
+    else if(modo==='procesando')obj = (0.2+0.5*Math.abs(Math.sin(t/230 - i/5)))*sobre;
+    else if(modo==='en pausa')  obj = 0.04;
+    else obj = Math.max(0.05 + 0.1*Math.sin(t/620 + i/7), nivel*sobre*(0.55+0.45*Math.random()));
+    alturas[i] += (obj - alturas[i]) * 0.24;
+    const bh = Math.max(2, alturas[i]*mitad*0.94);
+    cx.fillStyle = col;
+    cx.globalAlpha = 0.25 + alturas[i]*0.75;
+    cx.beginPath();
+    const x = i*bw+bw*0.22, bwid = bw*0.56;
+    if(cx.roundRect) cx.roundRect(x, mitad-bh, bwid, bh*2, bwid/2);
+    else cx.rect(x, mitad-bh, bwid, bh*2);
+    cx.fill();
+  }
+  cx.globalAlpha = 1;
+  document.documentElement.style.setProperty('--n', (alturas[N>>1]).toFixed(3));
+  nivel *= 0.9;
+  requestAnimationFrame(dibujar);
+}
+requestAnimationFrame(dibujar);
+
+/* ---------- servidor ---------- */
+async function post(ruta, cuerpo){
+  if(demo) return demoLocal(cuerpo && cuerpo.texto);
+  try{
+    await fetch(ruta + '?t=' + TOKEN, {method:'POST', headers:{'Content-Type':'application/json'},
+                                       body: JSON.stringify(cuerpo||{})});
+  }catch(e){ log('s','sin conexión con Jarvis'); }
+}
+function enviar(texto){ if(texto.trim()) post('/orden', {texto}); }
+$('#f').onsubmit = e => { e.preventDefault(); enviar($('#orden').value); $('#orden').value=''; };
+$('#b-pausa').onclick = () => post('/pausa');
+$('#b-salir').onclick = () => { if(confirm('¿Cerrar Jarvis?')) post('/salir'); };
+
+function aplicar(ev){
+  if(ev.tipo==='estado')      setModo(ev.dato);
+  else if(ev.tipo==='oido'){  setOido(ev.dato); log('yo','vos: '+ev.dato); }
+  else if(ev.tipo==='dijo')   log('j','jarvis: '+ev.dato);
+  else if(ev.tipo==='nota')   log('s',ev.dato);
+  else if(ev.tipo==='nivel')  nivel = Math.min(1, ev.dato);
+  else if(ev.tipo==='pendientes') setPendientes(ev.dato);
+  else if(ev.tipo==='info')   setInfo(ev.dato);
+  else if(ev.tipo==='cerrar'){ setModo('en pausa'); log('s','Jarvis se cerró.'); }
+}
+let fuente;
+function conectar(){
+  if(!TOKEN){ return arrancarDemo(); }
+  fuente = new EventSource('/eventos?t=' + TOKEN);
+  fuente.onmessage = e => { try{ aplicar(JSON.parse(e.data)); }catch(_){} };
+  fuente.onerror = () => { if(modo!=='en pausa') setModo('error'); };
+  fuente.onopen = () => { demo = false; $('#demo').classList.remove('on'); };
+}
+setTimeout(()=>{ if(!fuente || fuente.readyState !== 1) if(!TOKEN) arrancarDemo(); }, 1200);
+conectar();
+
+/* ---------- demostración (cuando se abre el archivo suelto) ---------- */
+const GUION = [
+  [600,  {tipo:'estado',dato:'escuchando'}],
+  [1400, {tipo:'oido',dato:'Jarvis, abrí Brave y entrá al disco H'}],
+  [100,  {tipo:'estado',dato:'procesando'}],
+  [900,  {tipo:'estado',dato:'hablando'}],
+  [80,   {tipo:'dijo',dato:'Abriendo brave.'}],
+  [700,  {tipo:'dijo',dato:'Abriendo disco H.'}],
+  [900,  {tipo:'estado',dato:'escuchando'}],
+  [2200, {tipo:'oido',dato:'Jarvis, anotá que el lunes entrego el TP'}],
+  [100,  {tipo:'estado',dato:'procesando'}],
+  [700,  {tipo:'estado',dato:'hablando'}],
+  [60,   {tipo:'dijo',dato:'Anotado: el lunes entrego el TP.'}],
+  [60,   {tipo:'pendientes',dato:['el lunes entrego el TP','comprar cable de 2.5','repasar para el final']}],
+  [1100, {tipo:'estado',dato:'escuchando'}],
+  [2400, {tipo:'oido',dato:'Jarvis, buenos días'}],
+  [100,  {tipo:'estado',dato:'procesando'}],
+  [1100, {tipo:'estado',dato:'hablando'}],
+  [80,   {tipo:'dijo',dato:'Buen día. Hoy es domingo 22 de noviembre. En Claypole hay 24 grados, parcialmente nublado. Tenés 3 pendientes.'}],
+  [3200, {tipo:'estado',dato:'escuchando'}],
+];
+function arrancarDemo(){
+  demo = true; $('#demo').classList.add('on');
+  setInfo({whisper:'small · cpu', llm:'qwen2.5:3b', voz:'es_MX-ald',
+           detalle:{'Órdenes fijas':'instantáneas','Órdenes libres':'~2 s',
+                    'Escucha':'local','Clima':'Open-Meteo'}});
+  setPendientes(['comprar cable de 2.5','repasar para el final']);
+  (function ciclo(){
+    let t = 0;
+    GUION.forEach(([d, ev]) => { t += d; setTimeout(()=>aplicar(ev), t); });
+    setInterval(()=>{ if(modo==='escuchando') nivel = Math.random()*0.18; }, 110);
+    setTimeout(ciclo, t + 2600);
+  })();
+}
+function demoLocal(texto){
+  if(!texto) return;
+  aplicar({tipo:'oido',dato:texto});
+  aplicar({tipo:'estado',dato:'procesando'});
+  setTimeout(()=>{ aplicar({tipo:'estado',dato:'hablando'});
+    aplicar({tipo:'dijo',dato:'(demostración) En tu PC esto se ejecuta de verdad.'});
+    setTimeout(()=>aplicar({tipo:'estado',dato:'escuchando'}), 900); }, 500);
+}
+</script>
+</body>
+</html>

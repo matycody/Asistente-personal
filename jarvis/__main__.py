@@ -1,8 +1,8 @@
 """Uso:
-    python -m jarvis                # escucha el micrófono y abre la ventana
+    python -m jarvis                # escucha el micrófono y abre la interfaz web
     python -m jarvis --text         # escribís las órdenes en vez de hablarlas (para probar)
     python -m jarvis --dry-run      # no ejecuta nada de verdad, solo dice qué haría
-    python -m jarvis --sin-hud      # sin ventana (solo consola)
+    python -m jarvis --sin-hud      # sin interfaz (solo consola)
     python -m jarvis --banco        # mide qué tan rápido va en tu PC
 """
 from __future__ import annotations
@@ -19,6 +19,8 @@ from .hud import NullUI
 from .speaker import Speaker, beep
 from .tasks import Tasks
 
+log = logging.getLogger("jarvis")
+
 
 def setup_logging() -> None:
     logging.basicConfig(
@@ -28,11 +30,12 @@ def setup_logging() -> None:
 
 
 def armar(cfg: dict, args, ui, pausado: threading.Event):
-    """Arma el asistente con todas sus partes."""
+    """Arma el asistente con todas sus partes y devuelve (speaker, assistant, procesar)."""
     from .llm import OllamaPlanner
 
     speaker = Speaker(cfg, enabled=not args.mute and not args.text, ui=ui)
-    ex = Executor(cfg, dry_run=args.dry_run, tasks=Tasks(cfg), pausar=pausado.set)
+    tareas = Tasks(cfg)
+    ex = Executor(cfg, dry_run=args.dry_run, tasks=tareas, pausar=pausado.set)
 
     def al_despertar():
         if cfg.get("sonidos", True) and not args.text:
@@ -43,13 +46,35 @@ def armar(cfg: dict, args, ui, pausado: threading.Event):
     if cfg.get("llm", {}).get("precargar", True) and not args.text:
         planner.precalentar()   # deja el modelo en memoria mientras carga Whisper
     asistente = Assistant(cfg, ex, planner=planner, on_wake=al_despertar)
-    return speaker, asistente
+
+    turno = threading.Lock()   # que no se pisen el micrófono y la interfaz
+
+    def refrescar_pendientes():
+        if hasattr(ui, "pendientes"):
+            try:
+                ui.pendientes([i["texto"] for i in tareas._leer()])
+            except Exception:
+                log.debug("No pude refrescar pendientes", exc_info=True)
+
+    def procesar(texto: str, de_voz: bool = True) -> None:
+        """Atiende una orden, venga del micrófono o de la interfaz."""
+        with turno:
+            if not de_voz:
+                ui.heard(texto)
+                ui.status("procesando")
+            respuestas = asistente.handle(texto)
+            for r in respuestas:
+                ui.status("hablando")
+                speaker.say(r)
+            refrescar_pendientes()
+            ui.status("en pausa" if pausado.is_set() else "escuchando")
+
+    return speaker, asistente, procesar, refrescar_pendientes
 
 
-def bucle_voz(cfg, args, ui, pausado: threading.Event, parar: threading.Event) -> None:
+def bucle_voz(cfg, args, ui, pausado, parar, partes=None) -> None:
     """Escucha el micrófono hasta que se pida parar. Corre en su propio hilo."""
-    log = logging.getLogger("jarvis")
-    speaker, asistente = armar(cfg, args, ui, pausado)
+    speaker, asistente, procesar, refrescar = partes or armar(cfg, args, ui, pausado)
     try:
         from .listener import Listener
         ui.status("iniciando")
@@ -57,13 +82,25 @@ def bucle_voz(cfg, args, ui, pausado: threading.Event, parar: threading.Event) -
         listener = Listener(cfg["whisper_model"], busy=speaker.busy,
                             umbral=cfg.get("umbral_voz", 4.0), pausado=pausado,
                             silencio_final=cfg.get("silencio_final", 0.65),
-                            dispositivo=cfg.get("whisper_device", "auto"))
+                            dispositivo=cfg.get("whisper_device", "auto"),
+                            on_level=getattr(ui, "nivel", None))
     except Exception:
         log.exception("No pude iniciar el micrófono")
         ui.status("error")
         ui.log("no pude iniciar el micrófono (mirá el log)")
         return
 
+    if hasattr(ui, "info"):
+        ui.info({
+            "whisper": f"{cfg['whisper_model']} · {listener.device}",
+            "llm": cfg["llm"]["model"] if cfg["llm"].get("enabled", True) else "apagado",
+            "voz": speaker.motor,
+            "detalle": {"Navegador": cfg.get("browser") or "el de Windows",
+                        "Ubicación": cfg["ubicacion"]["nombre"],
+                        "Órdenes fijas": "instantáneas",
+                        "Modo": "simulación" if args.dry_run else "normal"},
+        })
+    refrescar()
     speaker.say("Jarvis en línea.")
     ui.status("escuchando")
     log.info("Escuchando...")
@@ -78,11 +115,7 @@ def bucle_voz(cfg, args, ui, pausado: threading.Event, parar: threading.Event) -
                 continue
             log.info("OIDO: %s", texto)
             ui.heard(texto)
-            respuestas = asistente.handle(texto)
-            for r in respuestas:
-                ui.status("hablando")
-                speaker.say(r)
-            ui.status("en pausa" if pausado.is_set() else "escuchando")
+            procesar(texto)
         except Exception:
             log.exception("Error procesando una frase")
             ui.status("error")
@@ -92,7 +125,7 @@ def bucle_voz(cfg, args, ui, pausado: threading.Event, parar: threading.Event) -
 
 def modo_texto(cfg, args) -> None:
     ui = NullUI()
-    speaker, asistente = armar(cfg, args, ui, threading.Event())
+    speaker, asistente, procesar, _ = armar(cfg, args, ui, threading.Event())
     print("Modo texto. Escribí órdenes (ej: 'jarvis abrí brave'). Ctrl+C para salir.")
     while True:
         try:
@@ -108,7 +141,7 @@ def main() -> None:
     ap.add_argument("--text", action="store_true", help="modo texto (sin micrófono)")
     ap.add_argument("--dry-run", action="store_true", help="simular acciones")
     ap.add_argument("--mute", action="store_true", help="sin voz de respuesta")
-    ap.add_argument("--sin-hud", dest="sin_hud", action="store_true", help="sin ventana")
+    ap.add_argument("--sin-hud", dest="sin_hud", action="store_true", help="sin interfaz")
     ap.add_argument("--banco", action="store_true", help="medir velocidad en esta PC")
     args = ap.parse_args()
 
@@ -118,35 +151,57 @@ def main() -> None:
     if args.banco:
         from .bench import correr
         return correr()
-
     if args.text:
         return modo_texto(cfg, args)
 
     pausado, parar = threading.Event(), threading.Event()
-    con_ventana = cfg.get("hud", True) and not args.sin_hud
+    cual = "ninguna" if args.sin_hud else cfg.get("interfaz", "web")
+    if cual == "ventana" and not cfg.get("hud", True):
+        cual = "ninguna"
 
-    if not con_ventana:
-        ui = NullUI()
-        if cfg.get("bandeja", True):
-            from .tray import iniciar
-            iniciar(pausado, parar)
-        return bucle_voz(cfg, args, ui, pausado, parar)
+    # ---------- interfaz web (la de siempre) ----------
+    if cual == "web":
+        from .webui import WebUI
+        ui = WebUI(pausado, parar, puerto=int(cfg.get("puerto", 8777)))
+        try:
+            ui.iniciar()
+        except Exception:
+            log.exception("No pude levantar la interfaz web")
+            print("No pude levantar la interfaz web; sigo sin ella.")
+            ui = NullUI()
+        else:
+            partes = armar(cfg, args, ui, pausado)
+            ui.on_orden = lambda t: partes[2](t, de_voz=False)
+            if cfg.get("bandeja", True):
+                from .tray import iniciar
+                iniciar(pausado, parar, ui)
+            if cfg.get("abrir_al_arrancar", True):
+                ui.abrir_navegador(cfg.get("browser", ""))
+            print(f"Interfaz: {ui.url}")
+            return bucle_voz(cfg, args, ui, pausado, parar, partes)
 
-    try:
-        import tkinter  # noqa: F401  (si falta, seguimos sin ventana)
-        from .hud import Hud
-    except Exception:
-        logging.getLogger("jarvis").warning("Sin tkinter: sigo sin ventana.")
-        print("Sin ventana (falta tkinter). Jarvis igual escucha.")
-        return bucle_voz(cfg, args, NullUI(), pausado, parar)
+    # ---------- ventana simple (tkinter) ----------
+    if cual == "ventana":
+        try:
+            import tkinter  # noqa: F401
+            from .hud import Hud
+        except Exception:
+            log.warning("Sin tkinter: sigo sin ventana.")
+            cual = "ninguna"
+        else:
+            hud = Hud(pausado, parar)
+            if cfg.get("bandeja", True):
+                from .tray import iniciar
+                iniciar(pausado, parar, hud)
+            threading.Thread(target=bucle_voz, args=(cfg, args, hud, pausado, parar),
+                             daemon=True).start()
+            return hud.run()   # la ventana tiene que vivir en el hilo principal
 
-    hud = Hud(pausado, parar)
+    # ---------- sin interfaz ----------
     if cfg.get("bandeja", True):
         from .tray import iniciar
-        iniciar(pausado, parar, hud)
-    threading.Thread(target=bucle_voz, args=(cfg, args, hud, pausado, parar),
-                     daemon=True).start()
-    hud.run()   # la ventana tiene que vivir en el hilo principal
+        iniciar(pausado, parar)
+    return bucle_voz(cfg, args, NullUI(), pausado, parar)
 
 
 if __name__ == "__main__":
