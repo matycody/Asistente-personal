@@ -452,6 +452,16 @@ class Voz(unittest.TestCase):
                  ("Microsoft Jorge Desktop", "es-ES", "NotSet")]
         self.assertEqual(elegir_voz(voces, "masculina"), "Microsoft Jorge Desktop")
 
+    def test_avisa_cuando_no_hay_del_genero_pedido(self):
+        from jarvis.voz import elegir_voz, hay_del_genero
+        # masculina en inglés no sirve: se va a usar una española femenina
+        voces = [("Microsoft Sabina", "es-MX", "Female"),
+                 ("Microsoft David", "en-US", "Male")]
+        self.assertFalse(hay_del_genero(voces, "masculina"))
+        self.assertEqual(elegir_voz(voces, "masculina"), "Microsoft Sabina")
+        con_pablo = voces + [("Microsoft Pablo", "es-ES", "Male")]
+        self.assertTrue(hay_del_genero(con_pablo, "masculina"))
+
     def test_sin_voces_devuelve_nada(self):
         from jarvis.voz import elegir_voz
         self.assertIsNone(elegir_voz([], "masculina"))

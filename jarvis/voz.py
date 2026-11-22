@@ -55,14 +55,31 @@ def listar_voces_windows() -> list[tuple[str, str, str]]:
     return voces
 
 
+def _candidatas(voces: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+    """Las voces en español; si no hay ninguna, todas."""
+    espanolas = [v for v in voces
+                 if v[1].lower().startswith("es") or any(t in v[0].lower() for t in ESPANOL)]
+    return espanolas or voces
+
+
+def hay_del_genero(voces: list[tuple[str, str, str]], genero: str = "masculina") -> bool:
+    """¿Hay voz del género pedido ENTRE LAS QUE SE USARÍAN? Mira el mismo conjunto
+    que elegir_voz, así el aviso no miente cuando hay una masculina pero en inglés."""
+    quiere_m = genero.lower().startswith("m")
+    objetivo = "male" if quiere_m else "female"
+    deseadas = MASCULINAS if quiere_m else FEMENINAS
+    for n, _c, g in _candidatas(voces):
+        if g.lower() == objetivo or any(t in n.lower() for t in deseadas):
+            return True
+    return False
+
+
 def elegir_voz(voces: list[tuple[str, str, str]], genero: str = "masculina") -> str | None:
     """De las voces instaladas, la mejor: en español y del género pedido."""
     if not voces:
         return None
     quiere_m = genero.lower().startswith("m")
-    espanolas = [v for v in voces
-                 if v[1].lower().startswith("es") or any(t in v[0].lower() for t in ESPANOL)]
-    candidatas = espanolas or voces
+    candidatas = _candidatas(voces)
     # 1) lo que dice Windows sobre el género
     objetivo = "male" if quiere_m else "female"
     for v in candidatas:
@@ -227,9 +244,14 @@ def diagnostico() -> None:
     for n, c, g in voces:
         marca = "  <- español" if c.lower().startswith("es") else ""
         print(f"   · {n}  ({c}, {g}){marca}")
+    quiere = opts.get("genero", "masculina")
     if voces:
         print(f"\n   Elegiría para voz masculina: {elegir_voz(voces, 'masculina')}")
         print(f"   Elegiría para voz femenina:  {elegir_voz(voces, 'femenina')}")
+        if not hay_del_genero(voces, quiere):
+            print(f"\n   *** No tenés instalada NINGUNA voz {quiere} en Windows.")
+            print("   *** Por eso vas a escuchar una del otro género.")
+            print("   *** Solución: corré voz_natural.bat y elegí la opción 1.")
 
     # --- modelo de Piper ---
     print("\n2) Voz neural (Piper)")
@@ -241,18 +263,15 @@ def diagnostico() -> None:
         print(f"   Sin modelo ({ruta}). Corré voz_natural.bat si la querés.")
 
     # --- probar cada motor ---
-    frase = "Hola Matías, soy Jarvis. Si escuchás esto, la voz funciona."
-    print("\n3) Probando los motores (deberías ESCUCHAR cada uno)")
+    frase = "Hola, soy Jarvis. Si escuchás esto, la voz funciona."
+    print("\n3) Probando los motores (tenés que ESCUCHAR cada uno)")
+    elegida = elegir_voz(voces, quiere) if voces else None
     anduvo = []
     for nombre, fabrica in [
         ("piper", lambda: VozPiper(ruta, float(opts.get("ritmo", 0.95)))
             if ruta and ruta.exists() else None),
-        ("powershell", lambda: VozPowerShell(
-            elegir_voz(voces, opts.get("genero", "masculina")) if voces else None,
-            int(opts.get("velocidad", 185)))),
-        ("pyttsx3", lambda: VozPyttsx3(
-            elegir_voz(voces, opts.get("genero", "masculina")) if voces else None,
-            int(opts.get("velocidad", 185)))),
+        ("powershell", lambda: VozPowerShell(elegida, int(opts.get("velocidad", 185)))),
+        ("pyttsx3", lambda: VozPyttsx3(elegida, int(opts.get("velocidad", 185)))),
     ]:
         print(f"\n   [{nombre}] ", end="", flush=True)
         try:
@@ -261,7 +280,8 @@ def diagnostico() -> None:
                 print("salteado (no está disponible)")
                 continue
             motor.say(frase)
-            print("sonó bien")
+            usada = getattr(motor, "voz", None) or "la predeterminada"
+            print(f"arrancó sin error, con la voz: {usada}")
             anduvo.append(nombre)
             if hasattr(motor, "cerrar"):
                 motor.cerrar()
@@ -277,7 +297,12 @@ def diagnostico() -> None:
         print("  2. Que haya al menos una voz instalada (punto 1 de arriba).")
         print("  3. Pegame todo este texto y lo resolvemos.")
     else:
-        print(f" FUNCIONAN: {', '.join(anduvo)}")
+        print(f" ARRANCARON SIN ERROR: {', '.join(anduvo)}")
+        print(" (si no escuchaste nada, revisá el volumen y la salida de audio)")
+        if voces and not hay_del_genero(voces, quiere):
+            print(f"\n LA VOZ VA A SONAR DEL OTRO GÉNERO: no tenés ninguna voz {quiere}")
+            print(" instalada en Windows. Corré voz_natural.bat y elegí la opción 1")
+            print(" para bajar una voz masculina neural (63 MB, gratis, local).")
         if anduvo[0] != "piper":
             print(f'\n Para fijar el que anda, en config.json:')
             print(f'   "voz": {{ "motor": "{anduvo[0]}" }}')
