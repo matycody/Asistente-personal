@@ -138,44 +138,54 @@ Para cambiar de modelo o apagarlo, en `config.json`:
 
 ---
 
-## 5. La voz (masculina, gratis y local)
+## 5. La voz
 
-Si **no escuchás nada**, lo primero es:
+Para elegirla, corré **`voz_natural.bat`** y seguí el menú. Todas son gratis y ninguna
+pide cuenta ni clave.
+
+| | Voz | Cómo suena | Dónde corre |
+|---|---|---|---|
+| 1 | **Tomás, argentino** — recomendada | muy natural | internet |
+| 2 | Jorge, mexicano | muy natural | internet |
+| 3 | Álvaro, de España | muy natural | internet |
+| 4 | Elena, argentina | muy natural | internet |
+| 5 | Hombre latinoamericano (Piper) | aceptable | tu PC |
+| 6 | Hombre de España (Piper) | aceptable | tu PC |
+| 7 | Mujer argentina (Piper) | aceptable | tu PC |
+| 8 | La que trae Windows | robótica | tu PC |
+
+**Sobre las primeras cuatro.** Son las voces neurales de Microsoft Edge, las mismas que
+usan los videos que andan dando vuelta. Son gratis y sin cuenta, pero **no son locales**:
+el texto de las respuestas de Jarvis viaja a Microsoft para que lo devuelva hablado.
+Lo que decís por el micrófono **nunca sale de tu PC**: eso lo sigue resolviendo Whisper
+acá. Si se corta internet, Jarvis pasa solo a una voz local y sigue andando.
+
+Si querés que **nada** salga de tu PC, usá la 5. Suena peor, pero es totalmente offline.
+
+### Si no se escucha nada
 
 ```
 .venv\Scripts\python.exe -m jarvis --voz
 ```
 
-Lista las voces que tenés instaladas, prueba los tres motores uno por uno y te dice cuál
-anda. Si ninguno suena, pegame lo que imprime.
+Lista las voces instaladas, prueba cada motor y dice cuál anda. Si ninguno suena, pegame
+lo que imprime.
 
-**Los tres motores**, del más confiable al menos:
+### Los motores, por dentro
 
 | Motor | Qué es | Hace falta |
 |---|---|---|
-| `piper` | voz neural, la que mejor suena | bajar el modelo con `voz_natural.bat` |
-| `powershell` | la voz que ya trae Windows (System.Speech) | nada — es el que se usa por defecto |
-| `pyttsx3` | el paquete de Python | a veces queda mudo al usarse desde otro hilo |
+| `edge` | voces neurales de Microsoft | `pip install edge-tts soundfile` + internet |
+| `piper` | voz neural local | bajar el modelo (lo hace `voz_natural.bat`) |
+| `powershell` | la voz que trae Windows (System.Speech) | nada |
+| `pyttsx3` | el paquete de Python | a veces queda mudo desde otro hilo |
 
-Jarvis los prueba en ese orden y se queda con el primero que arranca. Para fijar uno,
-en `config.json`: `"voz": { "motor": "powershell" }`.
+Con `"motor": "edge"` prueba Edge y, si falla, cae a los locales en ese orden.
+Con `"motor": "auto"` **nunca** sale de tu PC.
 
-**Voz masculina.** Elige sola una voz de hombre en español entre las instaladas, usando
-lo que informa Windows y, si no informa nada, el nombre. Si tu Windows solo tiene voces
-femeninas, agregá una desde *Configuración → Hora e idioma → Voz → Agregar voces*, o usá
-Piper, que trae la suya.
-
-Para una voz neural corré **`voz_natural.bat`** y elegí:
-
-| Opción | Voz | Peso |
-|---|---|---|
-| 1 | Hombre latinoamericano (`es_MX-ald`) — **recomendada**, sin ceceo | ~60 MB |
-| 2 | Hombre de España (`es_ES-davefx`) | ~60 MB |
-| 3 | Mujer argentina (`es_AR-daniela`) | ~115 MB |
-
-En `config.json`:
-- más rápida: `"voz": { "ritmo": 0.9 }` en Piper, o `"velocidad": 210` en las de Windows
-- forzar una voz concreta: `"voz": { "nombre_voz": "Microsoft Pablo" }`
+Otros ajustes en `config.json`:
+- otra voz de Edge: `"voz": { "nombre_voz": "es-MX-JorgeNeural" }`
+- más rápida: `"voz": { "velocidad": 210 }`, o `"ritmo": 0.9` en Piper
 
 ---
 
@@ -276,7 +286,8 @@ ruta completa al `.exe`. El clima sale de Open-Meteo, que es gratis y no pide cl
 | Te entiende mal | `"whisper_model": "medium"` (más preciso, más lento) |
 | Va lento | `python -m jarvis --banco` y seguí lo que te diga |
 | No se escucha la voz | `python -m jarvis --voz` y seguí lo que diga |
-| La voz suena femenina | `python -m jarvis --voz` muestra cuáles tenés; si no hay de hombre, usá `voz_natural.bat` |
+| La voz suena robótica | `voz_natural.bat` y elegí la opción 1 |
+| La voz suena femenina | tu Windows no tiene voces de hombre: `voz_natural.bat`, opción 1 |
 | No arranca con Windows | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 estado` |
 | No se abre la interfaz | mirá la dirección en la consola y pegala en el navegador |
 | Querés sacar el autoarranque | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 quitar` |

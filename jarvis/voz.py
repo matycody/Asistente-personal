@@ -1,5 +1,9 @@
-"""Motores de voz para Windows, del más confiable al menos.
+"""Motores de voz para Windows.
 
+0. Edge         — las voces neurales de Microsoft Edge. Son las que mejor suenan y hay
+                  una argentina de hombre (Tomás). Gratis y sin cuenta ni clave, pero
+                  NO es local: manda el texto de las respuestas a Microsoft para que se
+                  lo devuelva hablado. Lo que decís por el micrófono nunca sale de tu PC.
 1. Piper        — voz neural local (si bajaste el modelo con voz_natural.bat).
 2. PowerShell   — System.Speech, que viene con Windows. No necesita instalar nada.
                   Se deja UN proceso abierto y se le pasan los textos, así no paga el
@@ -26,6 +30,17 @@ FEMENINAS = ("sabina", "helena", "laura", "elena", "female", "mujer")
 ESPANOL = ("spanish", "español", "es-", "es_")
 
 _SIN_VENTANA = 0x08000000 if IS_WIN else 0   # CREATE_NO_WINDOW
+
+# Voces neurales en español de Edge, las mejores primero para un argentino
+VOCES_EDGE = [
+    ("es-AR-TomasNeural", "Argentina", "Male"),
+    ("es-AR-ElenaNeural", "Argentina", "Female"),
+    ("es-MX-JorgeNeural", "México", "Male"),
+    ("es-CO-GonzaloNeural", "Colombia", "Male"),
+    ("es-ES-AlvaroNeural", "España", "Male"),
+    ("es-MX-DaliaNeural", "México", "Female"),
+    ("es-ES-ElviraNeural", "España", "Female"),
+]
 
 
 def _ps(script: str, entrada: str | None = None, timeout: int = 25) -> str:
@@ -101,6 +116,95 @@ def elegir_voz(voces: list[tuple[str, str, str]], genero: str = "masculina") -> 
 def _ritmo_sapi(palabras_por_minuto: int) -> int:
     """System.Speech usa -10..10; 0 es más o menos 200 palabras por minuto."""
     return max(-10, min(10, round((palabras_por_minuto - 200) / 22)))
+
+
+def reproducir_mp3(datos: bytes) -> None:
+    """Reproduce un mp3 que está en memoria. Prueba tres caminos: el primero que ande."""
+    if not datos:
+        return
+    # 1) soundfile + sounddevice: todo en memoria, es el más rápido
+    try:
+        import io
+        import sounddevice as sd
+        import soundfile as sf
+        audio, sr = sf.read(io.BytesIO(datos), dtype="float32")
+        sd.play(audio, sr)
+        sd.wait()
+        return
+    except Exception as e:
+        log.debug("soundfile no pudo con el mp3 (%s)", e)
+    # 2) miniaudio, si está
+    try:
+        import miniaudio
+        import numpy as np
+        import sounddevice as sd
+        dec = miniaudio.decode(datos)
+        sd.play(np.frombuffer(dec.samples, dtype="int16").reshape(-1, dec.nchannels),
+                dec.sample_rate)
+        sd.wait()
+        return
+    except Exception as e:
+        log.debug("miniaudio no pudo con el mp3 (%s)", e)
+    # 3) Windows: archivo temporal + MediaPlayer. Siempre está, pero es más lento.
+    if not IS_WIN:
+        raise RuntimeError("no encontré con qué reproducir el audio")
+    import os
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        f.write(datos)
+        ruta = f.name.replace("'", "''")
+    guion = (
+        "Add-Type -AssemblyName PresentationCore;"
+        "$p=New-Object System.Windows.Media.MediaPlayer;"
+        "$p.Open([uri]'" + ruta + "');"
+        "$n=0; while(-not $p.NaturalDuration.HasTimeSpan -and $n -lt 60)"
+        "{ Start-Sleep -Milliseconds 50; $n++ };"
+        "if($p.NaturalDuration.HasTimeSpan)"
+        "{ $d=$p.NaturalDuration.TimeSpan.TotalMilliseconds } else { $d=3000 };"
+        "$p.Play(); Start-Sleep -Milliseconds ([int]$d + 250); $p.Close()"
+    )
+    try:
+        _ps(guion, timeout=90)
+    finally:
+        try:
+            os.unlink(f.name)
+        except Exception:
+            pass
+
+
+class VozEdge:
+    """Voces neurales de Microsoft Edge. Gratis, sin clave, pero pasan por internet."""
+
+    def __init__(self, voz: str = "es-AR-TomasNeural", velocidad: int = 185):
+        import edge_tts  # noqa: F401  (si no está, Speaker pasa al siguiente motor)
+        self.voz = voz
+        porcentaje = max(-50, min(100, round((velocidad - 185) / 185 * 100)))
+        self.rate = f"{porcentaje:+d}%"
+        # Probamos la conexión y el nombre de la voz acá, sin reproducir nada: si no hay
+        # internet, Speaker pasa a un motor local en vez de fallar en cada frase.
+        if not self._audio("Hola"):
+            raise RuntimeError("Edge no devolvió audio (¿sin internet?)")
+
+    def _audio(self, texto: str) -> bytes:
+        import asyncio
+
+        import edge_tts
+
+        async def traer() -> bytes:
+            partes = []
+            com = edge_tts.Communicate(texto, self.voz, rate=self.rate)
+            async for ch in com.stream():
+                if ch["type"] == "audio":
+                    partes.append(ch["data"])
+            return b"".join(partes)
+
+        return asyncio.run(traer())
+
+    def say(self, texto: str) -> None:
+        texto = texto.strip()
+        if not texto:
+            return
+        reproducir_mp3(self._audio(texto))
 
 
 class VozPowerShell:
@@ -218,6 +322,30 @@ class VozPiper:
         sd.wait()
 
 
+# ---------------------------------------------------------------- guardar la elección
+def fijar_voz(motor: str, voz: str = "") -> None:
+    """Guarda el motor y la voz en config.json sin pisar el resto. Lo usa voz_natural.bat."""
+    import json
+
+    from .config import project_dir
+
+    ruta = project_dir() / "config.json"
+    try:
+        datos = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else {}
+    except Exception:
+        datos = {}
+    cfg = datos.setdefault("voz", {})
+    cfg["motor"] = motor
+    # limpiamos lo que no corresponda, para que no quede una voz vieja dando vueltas
+    cfg.pop("nombre_voz", None)
+    if motor == "piper":
+        cfg["modelo"] = voz
+    elif motor == "edge":
+        cfg["nombre_voz"] = voz
+    ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Guardado en config.json: motor={motor} voz={voz or '(la que elija sola)'}")
+
+
 # ---------------------------------------------------------------- diagnóstico
 def diagnostico() -> None:
     """`python -m jarvis --voz`: prueba cada motor y dice qué anda y qué no."""
@@ -253,8 +381,18 @@ def diagnostico() -> None:
             print("   *** Por eso vas a escuchar una del otro género.")
             print("   *** Solución: corré voz_natural.bat y elegí la opción 1.")
 
+    # --- Edge ---
+    print("\n2) Voces neurales de Edge (las que mejor suenan)")
+    try:
+        import edge_tts  # noqa: F401
+        print("   edge-tts instalado. Voces en español:")
+        for n, pais, g in VOCES_EDGE:
+            print(f"   · {n:24} {pais}, {'hombre' if g == 'Male' else 'mujer'}")
+    except Exception:
+        print("   edge-tts NO instalado. Corré voz_natural.bat y elegí la opción 1.")
+
     # --- modelo de Piper ---
-    print("\n2) Voz neural (Piper)")
+    print("\n3) Voz neural local (Piper)")
     modelo = opts.get("modelo", "")
     ruta = project_dir() / modelo if modelo else None
     if ruta and ruta.exists():
@@ -264,10 +402,12 @@ def diagnostico() -> None:
 
     # --- probar cada motor ---
     frase = "Hola, soy Jarvis. Si escuchás esto, la voz funciona."
-    print("\n3) Probando los motores (tenés que ESCUCHAR cada uno)")
+    print("\n4) Probando los motores (tenés que ESCUCHAR cada uno)")
     elegida = elegir_voz(voces, quiere) if voces else None
     anduvo = []
     for nombre, fabrica in [
+        ("edge", lambda: VozEdge(opts.get("nombre_voz") or "es-AR-TomasNeural",
+                                 int(opts.get("velocidad", 185)))),
         ("piper", lambda: VozPiper(ruta, float(opts.get("ritmo", 0.95)))
             if ruta and ruta.exists() else None),
         ("powershell", lambda: VozPowerShell(elegida, int(opts.get("velocidad", 185)))),
@@ -303,9 +443,10 @@ def diagnostico() -> None:
             print(f"\n LA VOZ VA A SONAR DEL OTRO GÉNERO: no tenés ninguna voz {quiere}")
             print(" instalada en Windows. Corré voz_natural.bat y elegí la opción 1")
             print(" para bajar una voz masculina neural (63 MB, gratis, local).")
-        if anduvo[0] != "piper":
-            print(f'\n Para fijar el que anda, en config.json:')
-            print(f'   "voz": {{ "motor": "{anduvo[0]}" }}')
+        if "edge" not in anduvo:
+            print("\n Para la mejor voz (Tomás, argentino): corré voz_natural.bat, opción 1.")
+        print(f'\n Para fijar el que anda, en config.json:')
+        print(f'   "voz": {{ "motor": "{anduvo[0]}" }}')
         print("\n Si escuchaste alguno pero Jarvis sigue mudo, pegame el final de")
         print("   %LOCALAPPDATA%\\Jarvis\\jarvis.log")
     print("=" * 58 + "\n")

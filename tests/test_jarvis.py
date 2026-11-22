@@ -492,6 +492,36 @@ class Voz(unittest.TestCase):
         self.assertFalse(hablante.enabled)
         hablante.say("esto no debería romper nada")   # sigue andando sin voz
 
+    def test_fijar_voz_limpia_lo_que_no_corresponde(self):
+        import json
+        import tempfile
+        from unittest import mock
+
+        from jarvis import voz as modvoz
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        carpeta = Path(tmp.name)
+        (carpeta / "config.json").write_text('{"browser":"brave"}', encoding="utf-8")
+        with mock.patch("jarvis.config.project_dir", return_value=carpeta):
+            modvoz.fijar_voz("edge", "es-AR-TomasNeural")
+            d = json.loads((carpeta / "config.json").read_text(encoding="utf-8"))
+            self.assertEqual(d["voz"], {"motor": "edge", "nombre_voz": "es-AR-TomasNeural"})
+            self.assertEqual(d["browser"], "brave")      # no pisa lo demás
+
+            modvoz.fijar_voz("piper", "voces/x.onnx")
+            d = json.loads((carpeta / "config.json").read_text(encoding="utf-8"))
+            self.assertNotIn("nombre_voz", d["voz"])     # la de Edge ya no sirve
+            self.assertEqual(d["voz"]["modelo"], "voces/x.onnx")
+
+    def test_edge_cae_a_los_locales_si_no_hay_internet(self):
+        from jarvis.speaker import construir_motor
+        motor, nombre, errores = construir_motor(
+            {"motor": "edge", "modelo": "voces/no-existe.onnx"}, avisar=lambda *a: None)
+        self.assertIsNone(motor)
+        intentados = [m for m, _ in errores]
+        self.assertEqual(intentados[0], "edge")              # primero prueba Edge
+        self.assertIn("piper", intentados)                   # y después los locales
+
     def test_motor_apagado_cuando_no_se_pide_voz(self):
         from jarvis.speaker import Speaker
         self.assertEqual(Speaker({}, enabled=False).motor, "apagada")

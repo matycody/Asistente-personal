@@ -152,11 +152,16 @@ def main() -> None:
     ap.add_argument("--sin-hud", dest="sin_hud", action="store_true", help="sin interfaz")
     ap.add_argument("--banco", action="store_true", help="medir velocidad en esta PC")
     ap.add_argument("--voz", action="store_true", help="probar la voz y diagnosticar")
+    ap.add_argument("--fijar-voz", dest="fijar_voz", nargs=2, metavar=("MOTOR", "VOZ"),
+                    help="guardar el motor y la voz en config.json")
     args = ap.parse_args()
 
     setup_logging()
     cfg = load_config()
 
+    if args.fijar_voz:
+        from .voz import fijar_voz
+        return fijar_voz(*args.fijar_voz)
     if args.voz:
         from .voz import diagnostico
         return diagnostico()

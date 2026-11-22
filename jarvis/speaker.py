@@ -7,7 +7,8 @@ import sys
 import threading
 
 from .config import project_dir
-from .voz import (VozPiper, VozPowerShell, VozPyttsx3, elegir_voz, listar_voces_windows)
+from .voz import (VozEdge, VozPiper, VozPowerShell, VozPyttsx3, elegir_voz,
+                  listar_voces_windows)
 
 log = logging.getLogger("jarvis")
 IS_WIN = sys.platform == "win32"
@@ -42,7 +43,9 @@ def construir_motor(opts: dict, avisar=log.info):
             avisar("Voz: %s no se pudo usar (%s)", nombre, str(e)[:200])
             return None, nombre
 
+    # "edge" cae a los locales si no hay internet; "auto" nunca sale de la PC
     orden = {"auto": ["piper", "powershell", "pyttsx3"],
+             "edge": ["edge", "piper", "powershell", "pyttsx3"],
              "piper": ["piper"], "powershell": ["powershell"], "sapi": ["powershell"],
              "pyttsx3": ["pyttsx3"]}.get(pedido, ["piper", "powershell", "pyttsx3"])
 
@@ -51,7 +54,11 @@ def construir_motor(opts: dict, avisar=log.info):
         voz_elegida = opts.get("nombre_voz") or None
 
     for nombre in orden:
-        if nombre == "piper":
+        if nombre == "edge":
+            motor, _ = intento("edge", lambda: VozEdge(
+                opts.get("nombre_voz") or "es-AR-TomasNeural",
+                int(opts.get("velocidad", 185))))
+        elif nombre == "piper":
             ruta = project_dir() / opts.get("modelo", "")
             if not opts.get("modelo") or not ruta.exists():
                 errores.append(("piper", f"no está el modelo en {ruta}"))
