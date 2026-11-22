@@ -157,5 +157,26 @@ class Archivo(unittest.TestCase):
         self.assertIn("papelera", resultado)               # las del sistema siempre están
 
 
+class Codificacion(unittest.TestCase):
+    """Windows no siempre devuelve UTF-8: un acento no puede tirar abajo el escaneo."""
+
+    def test_decodifica_cualquier_cosa(self):
+        from jarvis.powershell import decodificar
+        self.assertEqual(decodificar("Aplicación ñ".encode("utf-8")), "Aplicación ñ")
+        self.assertEqual(decodificar("Aplicación".encode("cp1252")), "Aplicación")
+        self.assertEqual(decodificar("\ufeffHola".encode("utf-16-le")), "Hola")
+        self.assertEqual(decodificar(b""), "")
+
+    def test_un_byte_invalido_no_levanta_excepcion(self):
+        from jarvis.powershell import decodificar
+        # esto es lo que rompía: 0xff suelto en medio de la salida
+        self.assertIn("Name", decodificar(b'[\r\n  {"Name":\xff"X"}'))
+
+    def test_el_prefijo_pide_utf8(self):
+        from jarvis.powershell import PREFIJO
+        self.assertIn("OutputEncoding", PREFIJO)
+        self.assertIn("UTF8", PREFIJO)
+
+
 if __name__ == "__main__":
     unittest.main()

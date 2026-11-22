@@ -85,8 +85,9 @@ def indexar_en_segundo_plano(ui) -> None:
             ui.log("buscando programas y juegos instalados…")
             datos = indice.reindexar(avisar=lambda t: log.info("indice: %s", t))
             ui.log(f"puedo abrir {len(datos)} cosas de tu PC")
-        except Exception:
+        except Exception as e:
             log.exception("No pude armar el índice")
+            ui.log(f"no pude listar los programas ({str(e)[:70]})")
 
     threading.Thread(target=trabajo, daemon=True).start()
 

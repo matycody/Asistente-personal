@@ -44,13 +44,8 @@ VOCES_EDGE = [
 
 
 def _ps(script: str, entrada: str | None = None, timeout: int = 25) -> str:
-    r = subprocess.run(
-        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-        input=entrada, capture_output=True, text=True, timeout=timeout,
-        creationflags=_SIN_VENTANA)
-    if r.returncode != 0:
-        raise RuntimeError((r.stderr or "powershell falló").strip()[:300])
-    return r.stdout
+    from .powershell import correr
+    return correr(script, entrada=entrada, timeout=timeout)
 
 
 def listar_voces_windows() -> list[tuple[str, str, str]]:
@@ -212,6 +207,7 @@ class VozPowerShell:
 
     GUION = (
         "$ErrorActionPreference='Stop';"
+        "try{{[Console]::OutputEncoding=[System.Text.Encoding]::UTF8}}catch{{}};"
         "Add-Type -AssemblyName System.Speech;"
         "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
         "$s.Rate={ritmo};"
@@ -238,7 +234,8 @@ class VozPowerShell:
         self.proc = subprocess.Popen(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", guion],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding="utf-8", bufsize=1, creationflags=_SIN_VENTANA)
+            text=True, encoding="utf-8", errors="replace", bufsize=1,
+            creationflags=_SIN_VENTANA)
         saludo = self.proc.stdout.readline().strip()
         if saludo != "listo":
             err = (self.proc.stderr.read() or "")[:300] if self.proc.poll() is not None else ""

@@ -16,7 +16,6 @@ import json
 import logging
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -25,7 +24,6 @@ from .texto import norm
 
 log = logging.getLogger("jarvis")
 IS_WIN = sys.platform == "win32"
-_SIN_VENTANA = 0x08000000 if IS_WIN else 0
 
 # Entradas del menú Inicio que no sirven como orden de voz
 BASURA = ("uninstall", "desinstalar", "readme", "leeme", "manual", "documentation",
@@ -71,12 +69,11 @@ def claves(titulo: str) -> list[str]:
 
 
 def _ps_json(script: str, timeout: int = 60):
-    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-                       capture_output=True, text=True, timeout=timeout,
-                       encoding="utf-8", creationflags=_SIN_VENTANA)
-    if r.returncode != 0 or not r.stdout.strip():
-        raise RuntimeError((r.stderr or "sin salida").strip()[:200])
-    datos = json.loads(r.stdout)
+    from .powershell import correr
+    salida = correr(script, timeout=timeout).strip()
+    if not salida:
+        raise RuntimeError("sin salida")
+    datos = json.loads(salida)
     return datos if isinstance(datos, list) else [datos]
 
 
