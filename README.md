@@ -140,11 +140,32 @@ Para cambiar de modelo o apagarlo, en `config.json`:
 
 ## 5. La voz (masculina, gratis y local)
 
-Por defecto busca una **voz masculina en español** entre las que ya trae Windows (Pablo,
-Raúl, Jorge…). Si tu Windows solo tiene voces femeninas instaladas, agregá una desde
-*Configuración → Hora e idioma → Voz → Agregar voces*.
+Si **no escuchás nada**, lo primero es:
 
-Para una voz neural, que suena bastante mejor, corré **`voz_natural.bat`** y elegí:
+```
+.venv\Scripts\python.exe -m jarvis --voz
+```
+
+Lista las voces que tenés instaladas, prueba los tres motores uno por uno y te dice cuál
+anda. Si ninguno suena, pegame lo que imprime.
+
+**Los tres motores**, del más confiable al menos:
+
+| Motor | Qué es | Hace falta |
+|---|---|---|
+| `piper` | voz neural, la que mejor suena | bajar el modelo con `voz_natural.bat` |
+| `powershell` | la voz que ya trae Windows (System.Speech) | nada — es el que se usa por defecto |
+| `pyttsx3` | el paquete de Python | a veces queda mudo al usarse desde otro hilo |
+
+Jarvis los prueba en ese orden y se queda con el primero que arranca. Para fijar uno,
+en `config.json`: `"voz": { "motor": "powershell" }`.
+
+**Voz masculina.** Elige sola una voz de hombre en español entre las instaladas, usando
+lo que informa Windows y, si no informa nada, el nombre. Si tu Windows solo tiene voces
+femeninas, agregá una desde *Configuración → Hora e idioma → Voz → Agregar voces*, o usá
+Piper, que trae la suya.
+
+Para una voz neural corré **`voz_natural.bat`** y elegí:
 
 | Opción | Voz | Peso |
 |---|---|---|
@@ -152,12 +173,9 @@ Para una voz neural, que suena bastante mejor, corré **`voz_natural.bat`** y el
 | 2 | Hombre de España (`es_ES-davefx`) | ~60 MB |
 | 3 | Mujer argentina (`es_AR-daniela`) | ~115 MB |
 
-El script la baja y la deja configurada. Después funciona sin internet.
-
 En `config.json`:
-- más rápida: `"voz": { "ritmo": 0.9 }` (menos de 1 = más rápido)
-- volver a la de Windows: `"voz": { "motor": "sapi" }`
-- forzar género en la voz de Windows: `"voz": { "genero": "masculina" }`
+- más rápida: `"voz": { "ritmo": 0.9 }` en Piper, o `"velocidad": 210` en las de Windows
+- forzar una voz concreta: `"voz": { "nombre_voz": "Microsoft Pablo" }`
 
 ---
 
@@ -257,7 +275,8 @@ ruta completa al `.exe`. El clima sale de Open-Meteo, que es gratis y no pide cl
 | Se activa solo con ruido | subí `"umbral_voz"` a 5 o 6 en `config.json` |
 | Te entiende mal | `"whisper_model": "medium"` (más preciso, más lento) |
 | Va lento | `python -m jarvis --banco` y seguí lo que te diga |
-| La voz suena femenina | corré `voz_natural.bat` y elegí la 1 |
+| No se escucha la voz | `python -m jarvis --voz` y seguí lo que diga |
+| La voz suena femenina | `python -m jarvis --voz` muestra cuáles tenés; si no hay de hombre, usá `voz_natural.bat` |
 | No arranca con Windows | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 estado` |
 | No se abre la interfaz | mirá la dirección en la consola y pegala en el navegador |
 | Querés sacar el autoarranque | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 quitar` |
@@ -279,7 +298,7 @@ El log anota lo que escuchó, lo que descartó por ruido y cada acción. Si algo
 | `jarvis/tasks.py` | clima, pendientes, empleo, facultad |
 | `jarvis/webui.py` + `web/index.html` | la interfaz: servidor local y página |
 | `jarvis/hud.py` / `tray.py` | ventana simple de respaldo e ícono del reloj |
-| `jarvis/speaker.py` | voz (Piper o Windows) y pitidos |
+| `jarvis/speaker.py` / `voz.py` | los tres motores de voz, el diagnóstico y los pitidos |
 | `jarvis/bench.py` | el banco de pruebas de velocidad |
 
 Para correr las pruebas: `.venv\Scripts\python.exe -m unittest discover -s tests -t .`

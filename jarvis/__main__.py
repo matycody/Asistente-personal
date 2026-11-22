@@ -4,6 +4,7 @@
     python -m jarvis --dry-run      # no ejecuta nada de verdad, solo dice qué haría
     python -m jarvis --sin-hud      # sin interfaz (solo consola)
     python -m jarvis --banco        # mide qué tan rápido va en tu PC
+    python -m jarvis --voz          # prueba la voz y dice qué motor anda
 """
 from __future__ import annotations
 
@@ -90,6 +91,13 @@ def bucle_voz(cfg, args, ui, pausado, parar, partes=None) -> None:
         ui.log("no pude iniciar el micrófono (mirá el log)")
         return
 
+    for _ in range(40):          # el motor de voz se elige en otro hilo
+        if speaker.motor != "cargando":
+            break
+        import time as _t
+        _t.sleep(0.05)
+    if speaker.motor == "ninguno":
+        ui.log("sin voz: corré  python -m jarvis --voz")
     if hasattr(ui, "info"):
         ui.info({
             "whisper": f"{cfg['whisper_model']} · {listener.device}",
@@ -143,11 +151,15 @@ def main() -> None:
     ap.add_argument("--mute", action="store_true", help="sin voz de respuesta")
     ap.add_argument("--sin-hud", dest="sin_hud", action="store_true", help="sin interfaz")
     ap.add_argument("--banco", action="store_true", help="medir velocidad en esta PC")
+    ap.add_argument("--voz", action="store_true", help="probar la voz y diagnosticar")
     args = ap.parse_args()
 
     setup_logging()
     cfg = load_config()
 
+    if args.voz:
+        from .voz import diagnostico
+        return diagnostico()
     if args.banco:
         from .bench import correr
         return correr()

@@ -432,27 +432,59 @@ class Ventana(unittest.TestCase):
 
 # ---------------------------------------------------------------- voz
 class Voz(unittest.TestCase):
-    class V:
-        def __init__(self, id_, name):
-            self.id, self.name = id_, name
+    def test_elige_masculina_por_lo_que_dice_windows(self):
+        from jarvis.voz import elegir_voz
+        voces = [("Microsoft Helena", "es-ES", "Female"),
+                 ("Microsoft Pablo", "es-ES", "Male"),
+                 ("Microsoft David", "en-US", "Male")]
+        self.assertEqual(elegir_voz(voces, "masculina"), "Microsoft Pablo")
+        self.assertEqual(elegir_voz(voces, "femenina"), "Microsoft Helena")
 
-    def test_elige_voz_masculina_en_espanol(self):
-        from jarvis.speaker import elegir_voz_sapi
-        voces = [self.V("TTS_MS_ES-ES_HELENA_11.0", "Microsoft Helena - Spanish (Spain)"),
-                 self.V("TTS_MS_ES-MX_PABLO_11.0", "Microsoft Pablo - Spanish (Mexico)"),
-                 self.V("TTS_MS_EN-US_DAVID_11.0", "Microsoft David - English (US)")]
-        self.assertIn("Pablo", elegir_voz_sapi(voces, "masculina").name)
-        self.assertIn("Helena", elegir_voz_sapi(voces, "femenina").name)
+    def test_prefiere_espanol_sobre_el_genero_correcto_en_ingles(self):
+        from jarvis.voz import elegir_voz
+        voces = [("Microsoft David", "en-US", "Male"),
+                 ("Microsoft Helena", "es-ES", "Female")]
+        self.assertEqual(elegir_voz(voces, "masculina"), "Microsoft Helena")
 
-    def test_sin_voces_masculinas_evita_las_femeninas(self):
-        from jarvis.speaker import elegir_voz_sapi
-        voces = [self.V("es-ES_HELENA", "Microsoft Helena - Spanish"),
-                 self.V("es-AR_TOMAS", "Microsoft Tomas - Spanish (Argentina)")]
-        self.assertIn("Tomas", elegir_voz_sapi(voces, "masculina").name)
+    def test_cuando_windows_no_informa_genero_usa_el_nombre(self):
+        from jarvis.voz import elegir_voz
+        voces = [("Microsoft Helena Desktop", "es-ES", "NotSet"),
+                 ("Microsoft Jorge Desktop", "es-ES", "NotSet")]
+        self.assertEqual(elegir_voz(voces, "masculina"), "Microsoft Jorge Desktop")
 
-    def test_sin_ninguna_voz_no_rompe(self):
-        from jarvis.speaker import elegir_voz_sapi
-        self.assertIsNone(elegir_voz_sapi([], "masculina"))
+    def test_sin_voces_devuelve_nada(self):
+        from jarvis.voz import elegir_voz
+        self.assertIsNone(elegir_voz([], "masculina"))
+
+    def test_ritmo_sapi_se_mantiene_en_rango(self):
+        from jarvis.voz import _ritmo_sapi
+        self.assertEqual(_ritmo_sapi(200), 0)
+        self.assertEqual(_ritmo_sapi(185), -1)
+        self.assertTrue(-10 <= _ritmo_sapi(40) <= 10)
+        self.assertTrue(-10 <= _ritmo_sapi(900) <= 10)
+
+    def test_el_guion_de_powershell_escapa_las_comillas(self):
+        from jarvis.voz import VozPowerShell
+        guion = VozPowerShell.GUION.format(ritmo=0, seleccion="try{$s.SelectVoice('O''Brien')}catch{};")
+        self.assertIn("O''Brien", guion)
+        self.assertIn("FromBase64String", guion)
+        self.assertNotIn("{ritmo}", guion)
+
+    def test_si_no_hay_ningun_motor_lo_dice_y_no_rompe(self):
+        from jarvis.speaker import Speaker
+        hablante = Speaker({"voz": {"motor": "piper", "modelo": "voces/no-existe.onnx"}})
+        for _ in range(50):
+            if hablante.motor != "cargando":
+                break
+            import time as _t
+            _t.sleep(0.02)
+        self.assertEqual(hablante.motor, "ninguno")
+        self.assertFalse(hablante.enabled)
+        hablante.say("esto no debería romper nada")   # sigue andando sin voz
+
+    def test_motor_apagado_cuando_no_se_pide_voz(self):
+        from jarvis.speaker import Speaker
+        self.assertEqual(Speaker({}, enabled=False).motor, "apagada")
 
 
 # ---------------------------------------------------------------- velocidad

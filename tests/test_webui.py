@@ -86,11 +86,14 @@ class Web(unittest.TestCase):
         leidos = []
 
         def leer():
-            for linea in r:
-                if linea.startswith(b"data: "):
-                    leidos.append(json.loads(linea[6:].decode()))
-                    if len(leidos) >= 3:
-                        return
+            try:
+                for linea in r:
+                    if linea.startswith(b"data: "):
+                        leidos.append(json.loads(linea[6:].decode()))
+                        if len(leidos) >= 3:
+                            return
+            except Exception:
+                pass   # el hilo muere cuando se cierra la respuesta
         h = threading.Thread(target=leer, daemon=True)
         h.start()
         time.sleep(0.4)
@@ -154,11 +157,14 @@ class Integracion(unittest.TestCase):
         leidos = []
 
         def leer():
-            for linea in r:
-                if linea.startswith(b"data: "):
-                    leidos.append(json.loads(linea[6:].decode()))
-                    if len(leidos) >= 4:
-                        return
+            try:
+                for linea in r:
+                    if linea.startswith(b"data: "):
+                        leidos.append(json.loads(linea[6:].decode()))
+                        if len(leidos) >= 4:
+                            return
+            except Exception:
+                pass
         h = threading.Thread(target=leer, daemon=True)
         h.start()
         time.sleep(0.3)
