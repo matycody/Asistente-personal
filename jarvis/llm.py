@@ -29,9 +29,27 @@ Respondé SOLO un JSON: {{"actions": [...]}} con a lo sumo 5 acciones, en el ord
 - {{"kind":"youtube_search","query":"..."}}  buscar en YouTube
 - {{"kind":"system","name":"<uno de: {system}>"}}
 - {{"kind":"say","text":"..."}}  responder con voz una pregunta simple (máx. 2 frases, sin listas)
+Reglas: usá "system" SOLO si el usuario pide explícitamente volumen, pausa, silencio, bloquear, etc. Para ir a una carpeta o abrir algo, usá "open".
 Si pide algo que no podés hacer con estas acciones, usá "say" explicando brevemente que no podés.
-Ahora son las {now}.
+Ejemplos:
+"llevame a lo que bajé hoy" -> {{"actions":[{{"kind":"open","name":"descargas"}}]}}
+"abrime el correo" -> {{"actions":[{{"kind":"open","name":"gmail"}}]}}
+"poneme música" -> {{"actions":[{{"kind":"open","name":"spotify"}}]}}
+"qué hora es" -> {{"actions":[{{"kind":"say","text":"Son las {hora}."}}]}}
+"qué día es hoy" -> {{"actions":[{{"kind":"say","text":"Hoy es {dia}."}}]}}
+"abrí brave y buscá recetas" -> {{"actions":[{{"kind":"open","name":"brave"}},{{"kind":"search","query":"recetas"}}]}}
 """
+
+
+DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+         "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def _fecha_es(now: datetime) -> tuple[str, str]:
+    hora = now.strftime("%H:%M")
+    dia = f"{DIAS[now.weekday()]} {now.day} de {MESES[now.month - 1]} de {now.year}"
+    return hora, dia
 
 
 def _default_transport(url: str, payload: dict, timeout: float) -> dict:
@@ -62,6 +80,7 @@ class OllamaPlanner:
     def plan(self, text: str) -> list[Intent]:
         if not self.enabled:
             return []
+        hora, dia = _fecha_es(datetime.now())
         payload = {
             "model": self.opts.get("model", "qwen2.5:3b"),
             "stream": False,
@@ -70,7 +89,7 @@ class OllamaPlanner:
             "messages": [
                 {"role": "system", "content": PROMPT.format(
                     names=self._names(), system=", ".join(sorted(SYSTEM_ACTIONS)),
-                    now=datetime.now().strftime("%A %d/%m/%Y %H:%M"))},
+                    hora=hora, dia=dia)},
                 {"role": "user", "content": text},
             ],
         }
@@ -86,9 +105,23 @@ class OllamaPlanner:
         log.info("LLM plan: %s", data)
         return self._validate(data)
 
+    @staticmethod
+    def _actions_of(data) -> list:
+        """Los modelos chicos no siempre respetan el formato: aceptamos varias formas."""
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            if isinstance(data.get("actions"), list):
+                return data["actions"]
+            if isinstance(data.get("action"), dict):
+                return [data["action"]]
+            if "kind" in data:
+                return [data]
+        return []
+
     def _validate(self, data) -> list[Intent]:
-        actions = data.get("actions") if isinstance(data, dict) else None
-        if not isinstance(actions, list):
+        actions = self._actions_of(data)
+        if not actions:
             return []
         out: list[Intent] = []
         for a in actions[:5]:

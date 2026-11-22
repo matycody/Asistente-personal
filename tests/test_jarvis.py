@@ -160,6 +160,28 @@ class FreeCommands(unittest.TestCase):
         self.t = 2
         self.assertEqual(a.handle("contame algo"), ["ok"])
 
+    def test_bare_action_object_is_accepted(self):
+        def bare(url, payload, timeout):
+            return {"message": {"content": _json.dumps({"kind": "say", "text": "Son las diez."})}}
+        a = self.make(bare)
+        self.assertEqual(a.handle("jarvis qué hora es"), ["Son las diez."])
+
+    def test_action_list_is_accepted(self):
+        def lst(url, payload, timeout):
+            return {"message": {"content": _json.dumps([{"kind": "open", "name": "brave"}])}}
+        a = self.make(lst)
+        a.handle("jarvis quiero navegar un rato")
+        self.assertEqual(self.ex.done, ["abrir app brave"])
+
+    def test_prompt_renders(self):
+        seen = {}
+        def spy(url, payload, timeout):
+            seen["p"] = payload["messages"][0]["content"]
+            return {"message": {"content": "{}"}}
+        self.make(spy).handle("jarvis algo raro")
+        self.assertIn("descargas", seen["p"])
+        self.assertNotIn("{hora}", seen["p"])
+
 
 if __name__ == "__main__":
     unittest.main()
