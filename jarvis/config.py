@@ -26,6 +26,10 @@ DEFAULT_CONFIG = {
     "browser": "brave",
     # Modelo de Whisper: tiny / base / small / medium (más grande = más preciso y más lento)
     "whisper_model": "small",
+    # "auto" usa la placa de video si hay NVIDIA (mucho más rápido), si no la CPU
+    "whisper_device": "auto",
+    # Silencio (en segundos) que espera antes de dar la frase por terminada. Menos = más rápido.
+    "silencio_final": 0.65,
     # Segundos que queda escuchando sin decir "Jarvis" después de un comando
     "followup_seconds": 6,
     # Cuánto más fuerte que el ruido de fondo tiene que ser tu voz. Subilo si se activa solo.
@@ -33,10 +37,15 @@ DEFAULT_CONFIG = {
     "hud": True,           # ventana con el estado
     "bandeja": True,       # ícono al lado del reloj
     "sonidos": True,       # pitido corto al activarse
-    # Voz: "auto" usa Piper si está el modelo, si no la voz de Windows
-    "voz": {"motor": "auto", "modelo": "voces/es_AR-daniela-high.onnx", "velocidad": 175},
+    # Voz: "auto" usa Piper si está el modelo, si no la de Windows.
+    # ritmo < 1 habla más rápido (Piper). velocidad = palabras por minuto (voz de Windows).
+    "voz": {"motor": "auto", "modelo": "voces/es_MX-ald-medium.onnx",
+            "genero": "masculina", "ritmo": 0.95, "velocidad": 185},
     # Órdenes libres con Ollama (https://ollama.com). Si no está instalado, se ignora sin problema.
-    "llm": {"enabled": True, "model": "qwen2.5:3b", "url": "http://127.0.0.1:11434", "timeout": 25},
+    # keep_alive deja el modelo en memoria; contexto = cuántas vueltas recuerda.
+    "llm": {"enabled": True, "model": "qwen2.5:3b", "url": "http://127.0.0.1:11434",
+            "timeout": 25, "keep_alive": "30m", "num_predict": 160, "num_ctx": 2048,
+            "contexto": 2, "precargar": True},
     # Para el clima del parte del día (Open-Meteo: gratis, sin clave, sin cuenta)
     "ubicacion": {"nombre": "Claypole", "lat": -34.80, "lon": -58.34,
                   "zona": "America/Argentina/Buenos_Aires"},

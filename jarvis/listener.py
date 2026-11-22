@@ -8,9 +8,11 @@ voz, o cuando el texto es una de las muletillas típicas que inventa.
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import re
 import threading
+import time
 import unicodedata
 from collections import deque
 
@@ -53,18 +55,51 @@ def es_alucinacion(texto: str) -> bool:
     return False
 
 
+def elegir_dispositivo(pedido: str = "auto") -> tuple[str, str]:
+    """Devuelve (device, compute_type). Si hay GPU NVIDIA, Whisper vuela."""
+    if pedido == "cpu":
+        return "cpu", "int8"
+    if pedido == "cuda":
+        return "cuda", "float16"
+    try:  # auto
+        import ctranslate2
+        if ctranslate2.get_cuda_device_count() > 0:
+            return "cuda", "float16"
+    except Exception:
+        pass
+    return "cpu", "int8"
+
+
 class Listener:
     def __init__(self, model_size: str = "small", busy: threading.Event | None = None,
-                 umbral: float = 4.0, pausado: threading.Event | None = None):
+                 umbral: float = 4.0, pausado: threading.Event | None = None,
+                 silencio_final: float = 0.65, dispositivo: str = "auto"):
         from faster_whisper import WhisperModel  # import tardío: es pesado
 
-        log.info("Cargando modelo Whisper '%s'...", model_size)
-        self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        device, compute = elegir_dispositivo(dispositivo)
+        hilos = max(1, os.cpu_count() or 1)
+        log.info("Cargando Whisper '%s' en %s (%s, %d hilos)...", model_size, device, compute, hilos)
+        t0 = time.monotonic()
+        self.model = WhisperModel(model_size, device=device, compute_type=compute,
+                                  cpu_threads=hilos)
+        self.device = device
         self.busy = busy or threading.Event()        # activo mientras Jarvis habla
         self.pausado = pausado or threading.Event()  # activo si el usuario pausó
         self.umbral_factor = umbral
+        self.silencio_final = silencio_final
         self.umbral = 0.0
         self.q: "queue.Queue" = queue.Queue()
+        self._precalentar()
+        log.info("Whisper listo en %.1f s", time.monotonic() - t0)
+
+    def _precalentar(self) -> None:
+        """Primera transcripción en vacío: así la de verdad no paga el arranque."""
+        try:
+            import numpy as np
+            list(self.model.transcribe(np.zeros(SAMPLE_RATE // 2, dtype="float32"),
+                                       language="es", beam_size=1)[0])
+        except Exception:
+            log.debug("No pude precalentar Whisper", exc_info=True)
 
     def _callback(self, indata, frames, time_info, status):
         self.q.put(indata[:, 0].copy())
@@ -97,7 +132,7 @@ class Listener:
             preroll = deque(maxlen=10)
             speech: list = []
             hablando, silencio, fuerte = False, 0, 0
-            fin_silencio = int(0.9 * SAMPLE_RATE / BLOCK)
+            fin_silencio = max(8, int(self.silencio_final * SAMPLE_RATE / BLOCK))
             max_bloques = int(12 * SAMPLE_RATE / BLOCK)
 
             while not stop.is_set():
@@ -130,9 +165,11 @@ class Listener:
                             yield audio
 
     def transcribe(self, audio) -> str:
+        t0 = time.monotonic()
         segments, info = self.model.transcribe(
             audio, language="es", beam_size=1, vad_filter=True,
             condition_on_previous_text=False, initial_prompt=PROMPT,
+            without_timestamps=True,
         )
         partes, no_voz, logprob, n = [], 0.0, 0.0, 0
         for s in segments:
@@ -141,6 +178,7 @@ class Listener:
             logprob += getattr(s, "avg_logprob", 0.0) or 0.0
             n += 1
         texto = " ".join(p for p in partes if p).strip()
+        log.info("Transcripción en %.2f s", time.monotonic() - t0)
         if not texto:
             return ""
         if no_voz > 0.6:

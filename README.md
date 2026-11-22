@@ -104,17 +104,80 @@ Para cambiar de modelo o apagarlo, en `config.json`:
 
 ---
 
-## 5. Voz más natural (opcional, también gratis y local)
+## 5. La voz (masculina, gratis y local)
 
-Por defecto habla con las voces que ya trae Windows. Para una voz neural argentina,
-corré **`voz_natural.bat`**: instala Piper y baja la voz `es_AR-daniela` (unos 115 MB).
-Después de eso funciona sin internet.
+Por defecto busca una **voz masculina en español** entre las que ya trae Windows (Pablo,
+Raúl, Jorge…). Si tu Windows solo tiene voces femeninas instaladas, agregá una desde
+*Configuración → Hora e idioma → Voz → Agregar voces*.
 
-Para volver atrás: `"voz": { "motor": "sapi" }` en `config.json`.
+Para una voz neural, que suena bastante mejor, corré **`voz_natural.bat`** y elegí:
+
+| Opción | Voz | Peso |
+|---|---|---|
+| 1 | Hombre latinoamericano (`es_MX-ald`) — **recomendada**, sin ceceo | ~60 MB |
+| 2 | Hombre de España (`es_ES-davefx`) | ~60 MB |
+| 3 | Mujer argentina (`es_AR-daniela`) | ~115 MB |
+
+El script la baja y la deja configurada. Después funciona sin internet.
+
+En `config.json`:
+- más rápida: `"voz": { "ritmo": 0.9 }` (menos de 1 = más rápido)
+- volver a la de Windows: `"voz": { "motor": "sapi" }`
+- forzar género en la voz de Windows: `"voz": { "genero": "masculina" }`
 
 ---
 
-## 6. Configurarlo a tu gusto
+## 6. Que vaya más rápido
+
+Medí cuánto tarda **en tu PC**:
+
+```
+.venv\Scripts\python.exe -m jarvis --banco
+```
+
+Graba 3 segundos tuyos, mide la escucha y el modelo, y te dice qué conviene cambiar.
+
+Lo que ya viene optimizado:
+
+- **El modelo se precarga al arrancar** y se queda en memoria 30 minutos, así la primera
+  orden no espera a que cargue.
+- **Whisper usa todos los núcleos** de tu CPU, y la placa de video si tenés una NVIDIA
+  (`"whisper_device": "auto"`).
+- **Corta antes la frase**: espera 0.65 s de silencio en vez de 0.9 s.
+- **Tope a lo que escribe el modelo**, para que no se vaya en respuestas largas.
+
+Si aún así va lento, en `config.json`:
+
+| Cambio | Efecto |
+|---|---|
+| `"whisper_model": "base"` | entiende 2 o 3 veces más rápido, un poco menos preciso |
+| `"llm": { "model": "qwen2.5:1.5b" }` | órdenes libres mucho más rápidas, menos listas |
+| `"silencio_final": 0.5` | responde antes, pero te puede cortar si hacés pausas |
+| `"llm": { "enabled": false }` | apaga las órdenes libres: todo lo de las tablas sigue instantáneo |
+
+**Las órdenes de las tablas no pasan por el modelo**: se resuelven al instante. El modelo
+solo entra cuando decís algo que las reglas no conocen.
+
+---
+
+## 7. Que entienda mejor
+
+Jarvis ahora **recuerda las últimas dos vueltas**, así podés encadenar ("abrí Brave"…
+"ahora buscá recetas ahí"), y responde preguntas sueltas con voz.
+
+Si tenés 16 GB de RAM o más, un modelo más grande entiende bastante mejor:
+
+```
+ollama pull qwen2.5:7b
+```
+y en `config.json`: `"llm": { "model": "qwen2.5:7b" }`
+
+Va a tardar más por orden. Corré `--banco` antes y después para comparar con números
+en vez de a ojo.
+
+---
+
+## 8. Configurarlo a tu gusto
 
 Todo se toca en **`config.json`**. Solo escribís lo que querés cambiar; el resto sale de
 los valores de fábrica (`jarvis/config.py`).
@@ -129,6 +192,9 @@ los valores de fábrica (`jarvis/config.py`).
   "sites":   { "campus": "https://tu-campus.edu.ar" },
 
   "ubicacion": { "nombre": "Claypole", "lat": -34.80, "lon": -58.34 },
+
+  "voz": { "genero": "masculina", "ritmo": 0.95 },
+  "llm": { "model": "qwen2.5:3b", "contexto": 2 },
 
   "empleo": {
     "por_defecto": "programacion",
@@ -150,12 +216,14 @@ ruta completa al `.exe`. El clima sale de Open-Meteo, que es gratis y no pide cl
 
 ---
 
-## 7. Si algo no anda
+## 9. Si algo no anda
 
 | Problema | Qué hacer |
 |---|---|
 | Se activa solo con ruido | subí `"umbral_voz"` a 5 o 6 en `config.json` |
 | Te entiende mal | `"whisper_model": "medium"` (más preciso, más lento) |
+| Va lento | `python -m jarvis --banco` y seguí lo que te diga |
+| La voz suena femenina | corré `voz_natural.bat` y elegí la 1 |
 | No arranca con Windows | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 estado` |
 | Querés sacar el autoarranque | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 quitar` |
 | Quiero ver qué pasó | `notepad %LOCALAPPDATA%\Jarvis\jarvis.log` |
@@ -164,7 +232,7 @@ El log anota lo que escuchó, lo que descartó por ruido y cada acción. Si algo
 
 ---
 
-## 8. Cómo está hecho
+## 10. Cómo está hecho
 
 | Archivo | Qué hace |
 |---|---|
@@ -176,6 +244,7 @@ El log anota lo que escuchó, lo que descartó por ruido y cada acción. Si algo
 | `jarvis/tasks.py` | clima, pendientes, empleo, facultad |
 | `jarvis/hud.py` / `tray.py` | ventana de estado e ícono del reloj |
 | `jarvis/speaker.py` | voz (Piper o Windows) y pitidos |
+| `jarvis/bench.py` | el banco de pruebas de velocidad |
 
 Para correr las pruebas: `.venv\Scripts\python.exe -m unittest discover -s tests -t .`
 

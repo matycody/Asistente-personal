@@ -430,6 +430,73 @@ class Ventana(unittest.TestCase):
         ui.status("x"); ui.heard("x"); ui.said("x"); ui.log("x"); ui.close()
 
 
+# ---------------------------------------------------------------- voz
+class Voz(unittest.TestCase):
+    class V:
+        def __init__(self, id_, name):
+            self.id, self.name = id_, name
+
+    def test_elige_voz_masculina_en_espanol(self):
+        from jarvis.speaker import elegir_voz_sapi
+        voces = [self.V("TTS_MS_ES-ES_HELENA_11.0", "Microsoft Helena - Spanish (Spain)"),
+                 self.V("TTS_MS_ES-MX_PABLO_11.0", "Microsoft Pablo - Spanish (Mexico)"),
+                 self.V("TTS_MS_EN-US_DAVID_11.0", "Microsoft David - English (US)")]
+        self.assertIn("Pablo", elegir_voz_sapi(voces, "masculina").name)
+        self.assertIn("Helena", elegir_voz_sapi(voces, "femenina").name)
+
+    def test_sin_voces_masculinas_evita_las_femeninas(self):
+        from jarvis.speaker import elegir_voz_sapi
+        voces = [self.V("es-ES_HELENA", "Microsoft Helena - Spanish"),
+                 self.V("es-AR_TOMAS", "Microsoft Tomas - Spanish (Argentina)")]
+        self.assertIn("Tomas", elegir_voz_sapi(voces, "masculina").name)
+
+    def test_sin_ninguna_voz_no_rompe(self):
+        from jarvis.speaker import elegir_voz_sapi
+        self.assertIsNone(elegir_voz_sapi([], "masculina"))
+
+
+# ---------------------------------------------------------------- velocidad
+class Velocidad(unittest.TestCase):
+    def test_payload_trae_keep_alive_y_tope(self):
+        visto = {}
+
+        def spy(url, payload, timeout):
+            visto.update(payload)
+            return {"message": {"content": "{}"}}
+        OllamaPlanner(CFG, transport=spy).plan("algo")
+        self.assertEqual(visto["keep_alive"], "30m")
+        self.assertEqual(visto["options"]["num_predict"], 160)
+        self.assertEqual(visto["options"]["temperature"], 0)
+
+    def test_recuerda_las_ultimas_vueltas(self):
+        vistos = []
+
+        def spy(url, payload, timeout):
+            vistos.append(payload["messages"])
+            return {"message": {"content": _json.dumps(
+                {"actions": [{"kind": "open", "name": "brave"}]})}}
+        p = OllamaPlanner(CFG, transport=spy)
+        p.plan("abrime el navegador")
+        p.plan("y ahora cerralo")
+        roles = [m["role"] for m in vistos[1]]
+        self.assertEqual(roles, ["system", "user", "assistant", "user"])
+        self.assertEqual(vistos[1][1]["content"], "abrime el navegador")
+
+    def test_no_recuerda_si_no_entendio(self):
+        def vacio(url, payload, timeout):
+            return {"message": {"content": "{}"}}
+        p = OllamaPlanner(CFG, transport=vacio)
+        p.plan("una")
+        p.plan("otra")
+        self.assertEqual(len(p.historial), 0)
+
+    def test_precalentar_no_rompe_sin_ollama(self):
+        p = OllamaPlanner(CFG, transport=broken)
+        p.precalentar()   # corre en segundo plano y solo debe anotar el aviso
+        import time as _t
+        _t.sleep(0.2)
+
+
 # ---------------------------------------------------------------- configuración
 class Config(unittest.TestCase):
     def test_merge_anidado_no_pisa_el_resto(self):

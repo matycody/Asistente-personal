@@ -3,12 +3,19 @@
 El modelo NO ejecuta nada: solo traduce lo que dijiste a acciones de una lista cerrada.
 Cada acción se valida acá antes de llegar al Executor, así que aunque el modelo se
 equivoque no puede abrir cualquier cosa ni correr comandos.
+
+Para que conteste rápido: el modelo se precarga al arrancar y se queda en memoria
+(keep_alive), se le pone un techo a lo que escribe (num_predict) y el prompt de sistema
+es siempre el mismo, así Ollama reutiliza lo ya procesado.
 """
 from __future__ import annotations
 
 import json
 import logging
+import threading
+import time
 import urllib.request
+from collections import deque
 from datetime import datetime
 
 from .commands import Intent, norm, resolve_target
@@ -37,9 +44,10 @@ Respondé SOLO un JSON: {{"actions": [...]}} con a lo sumo 5 acciones, en el ord
   todos los pendientes; study = abrir las cosas de la facultad
 - {{"kind":"note_add","text":"..."}}  anotar algo en los pendientes
 - {{"kind":"jobs","profile":"programacion"|"electricidad"}}  abrir las búsquedas de empleo
-- {{"kind":"say","text":"..."}}  responder con voz una pregunta simple (máx. 2 frases, sin listas)
+- {{"kind":"say","text":"..."}}  hablarle al usuario: responder una pregunta, explicar algo
+  corto o avisar que no podés hacer lo que pide. Máximo 2 frases, sin listas ni markdown,
+  pensado para escucharse en voz alta. Si sabés la respuesta, contestala.
 Reglas: usá "system" SOLO si el usuario pide explícitamente volumen, pausa, silencio, bloquear, etc. Para ir a una carpeta o abrir algo, usá "open".
-Si pide algo que no podés hacer con estas acciones, usá "say" explicando brevemente que no podés.
 Ejemplos:
 "llevame a lo que bajé hoy" -> {{"actions":[{{"kind":"open","name":"descargas"}}]}}
 "abrime el correo" -> {{"actions":[{{"kind":"open","name":"gmail"}}]}}
@@ -47,8 +55,8 @@ Ejemplos:
 "cómo viene el día" -> {{"actions":[{{"kind":"task","name":"brief"}}]}}
 "no te olvides que mañana tengo parcial" -> {{"actions":[{{"kind":"note_add","text":"mañana tengo parcial"}}]}}
 "mostrame trabajos de electricista" -> {{"actions":[{{"kind":"jobs","profile":"electricidad"}}]}}
+"qué es un contactor" -> {{"actions":[{{"kind":"say","text":"Es un interruptor accionado por un electroimán, que permite manejar un circuito de potencia desde uno de mando."}}]}}
 "qué hora es" -> {{"actions":[{{"kind":"say","text":"Son las {hora}."}}]}}
-"qué día es hoy" -> {{"actions":[{{"kind":"say","text":"Hoy es {dia}."}}]}}
 "abrí brave y buscá recetas" -> {{"actions":[{{"kind":"open","name":"brave"}},{{"kind":"search","query":"recetas"}}]}}
 """
 
@@ -69,43 +77,85 @@ class OllamaPlanner:
         self.opts = cfg.get("llm", {})
         self.transport = transport
         self._warned = False
+        # memoria corta: las últimas vueltas, para que entienda "y ahora cerralo"
+        self.historial: deque = deque(maxlen=max(0, int(self.opts.get("contexto", 2))) * 2)
 
     @property
     def enabled(self) -> bool:
         return bool(self.opts.get("enabled", True))
 
+    @property
+    def modelo(self) -> str:
+        return self.opts.get("model", "qwen2.5:3b")
+
     def _names(self) -> str:
         keys = sorted({*self.cfg["apps"], *self.cfg["folders"], *self.cfg["sites"]})
         return ", ".join(keys)
 
+    def _sistema(self) -> str:
+        now = datetime.now()
+        return PROMPT.format(
+            names=self._names(), system=", ".join(sorted(SYSTEM_ACTIONS)),
+            tasks=", ".join(sorted(TASK_ACTIONS)),
+            hora=hora_corta(now), dia=fecha_larga(now))
+
+    def _payload(self, mensajes: list[dict]) -> dict:
+        return {
+            "model": self.modelo,
+            "stream": False,
+            "format": "json",
+            "keep_alive": self.opts.get("keep_alive", "30m"),
+            "options": {
+                "temperature": 0,
+                "num_predict": int(self.opts.get("num_predict", 160)),
+                "num_ctx": int(self.opts.get("num_ctx", 2048)),
+            },
+            "messages": mensajes,
+        }
+
+    # ---------- precarga ----------
+    def precalentar(self) -> None:
+        """Deja el modelo cargado en memoria para que la primera orden no espere."""
+        if not self.enabled:
+            return
+
+        def _trabajo():
+            t0 = time.monotonic()
+            try:
+                payload = self._payload([{"role": "system", "content": self._sistema()},
+                                         {"role": "user", "content": "hola"}])
+                payload["options"]["num_predict"] = 1
+                self.transport(self.opts.get("url", "http://127.0.0.1:11434"), payload, 120)
+                log.info("Modelo %s precargado en %.1f s", self.modelo, time.monotonic() - t0)
+            except Exception as e:
+                log.info("No pude precargar el modelo (%s). Se cargará en la primera orden.", e)
+
+        threading.Thread(target=_trabajo, daemon=True).start()
+
+    # ---------- plan ----------
     def plan(self, text: str) -> list[Intent]:
         if not self.enabled:
             return []
-        now = datetime.now()
-        payload = {
-            "model": self.opts.get("model", "qwen2.5:3b"),
-            "stream": False,
-            "format": "json",
-            "options": {"temperature": 0},
-            "messages": [
-                {"role": "system", "content": PROMPT.format(
-                    names=self._names(), system=", ".join(sorted(SYSTEM_ACTIONS)),
-                    tasks=", ".join(sorted(TASK_ACTIONS)),
-                    hora=hora_corta(now), dia=fecha_larga(now))},
-                {"role": "user", "content": text},
-            ],
-        }
+        mensajes = [{"role": "system", "content": self._sistema()}]
+        mensajes.extend(self.historial)
+        mensajes.append({"role": "user", "content": text})
+        t0 = time.monotonic()
         try:
             reply = self.transport(self.opts.get("url", "http://127.0.0.1:11434"),
-                                   payload, self.opts.get("timeout", 25))
-            data = json.loads(reply["message"]["content"])
+                                   self._payload(mensajes), self.opts.get("timeout", 25))
+            crudo = reply["message"]["content"]
+            data = json.loads(crudo)
         except Exception as e:  # Ollama apagado, modelo no descargado, JSON roto...
             if not self._warned:
                 log.warning("LLM no disponible (%s). Sigo solo con frases fijas.", e)
                 self._warned = True
             return []
-        log.info("LLM plan: %s", data)
-        return self._validate(data)
+        log.info("LLM respondió en %.1f s: %s", time.monotonic() - t0, data)
+        acciones = self._validate(data)
+        if acciones and self.historial.maxlen:
+            self.historial.append({"role": "user", "content": text})
+            self.historial.append({"role": "assistant", "content": crudo[:400]})
+        return acciones
 
     @staticmethod
     def _actions_of(data) -> list:

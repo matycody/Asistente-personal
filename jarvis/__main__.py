@@ -3,6 +3,7 @@
     python -m jarvis --text         # escribís las órdenes en vez de hablarlas (para probar)
     python -m jarvis --dry-run      # no ejecuta nada de verdad, solo dice qué haría
     python -m jarvis --sin-hud      # sin ventana (solo consola)
+    python -m jarvis --banco        # mide qué tan rápido va en tu PC
 """
 from __future__ import annotations
 
@@ -38,7 +39,10 @@ def armar(cfg: dict, args, ui, pausado: threading.Event):
             beep("wake")
         ui.status("procesando")
 
-    asistente = Assistant(cfg, ex, planner=OllamaPlanner(cfg), on_wake=al_despertar)
+    planner = OllamaPlanner(cfg)
+    if cfg.get("llm", {}).get("precargar", True) and not args.text:
+        planner.precalentar()   # deja el modelo en memoria mientras carga Whisper
+    asistente = Assistant(cfg, ex, planner=planner, on_wake=al_despertar)
     return speaker, asistente
 
 
@@ -51,7 +55,9 @@ def bucle_voz(cfg, args, ui, pausado: threading.Event, parar: threading.Event) -
         ui.status("iniciando")
         ui.log("cargando el modelo de voz…")
         listener = Listener(cfg["whisper_model"], busy=speaker.busy,
-                            umbral=cfg.get("umbral_voz", 4.0), pausado=pausado)
+                            umbral=cfg.get("umbral_voz", 4.0), pausado=pausado,
+                            silencio_final=cfg.get("silencio_final", 0.65),
+                            dispositivo=cfg.get("whisper_device", "auto"))
     except Exception:
         log.exception("No pude iniciar el micrófono")
         ui.status("error")
@@ -103,10 +109,15 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="simular acciones")
     ap.add_argument("--mute", action="store_true", help="sin voz de respuesta")
     ap.add_argument("--sin-hud", dest="sin_hud", action="store_true", help="sin ventana")
+    ap.add_argument("--banco", action="store_true", help="medir velocidad en esta PC")
     args = ap.parse_args()
 
     setup_logging()
     cfg = load_config()
+
+    if args.banco:
+        from .bench import correr
+        return correr()
 
     if args.text:
         return modo_texto(cfg, args)

@@ -1,7 +1,7 @@
 """Voz de Jarvis.
 
 Dos motores, los dos gratis y sin internet:
-  - Piper: voz neural, suena natural. Hay que bajar el modelo una vez (bajar_voz.bat).
+  - Piper: voz neural, suena natural. Hay que bajar el modelo una vez (voz_natural.bat).
   - SAPI: las voces que ya trae Windows. Es el respaldo si Piper no está.
 """
 from __future__ import annotations
@@ -15,6 +15,42 @@ from .config import project_dir
 
 log = logging.getLogger("jarvis")
 IS_WIN = sys.platform == "win32"
+
+# Pistas para elegir una voz masculina entre las que tenga instaladas Windows
+MASCULINAS = ("pablo", "raul", "jorge", "diego", "miguel", "carlos", "male")
+FEMENINAS = ("sabina", "helena", "laura", "elena", "female")
+ESPANOL = ("spanish", "es-", "es_", "espa")
+
+
+class _Piper:
+    """Voz neural local. Lanza excepción si no se puede usar."""
+
+    def __init__(self, modelo, ritmo: float = 1.0):
+        from piper.voice import PiperVoice  # type: ignore
+        self.voice = PiperVoice.load(str(modelo))
+        self.rate = int(self.voice.config.sample_rate)
+        self.ritmo = ritmo   # <1 habla más rápido
+
+    def _chunks(self, texto: str):
+        # La API de Piper cambió entre versiones: probamos las dos, con y sin ritmo.
+        if hasattr(self.voice, "synthesize_stream_raw"):
+            try:
+                yield from self.voice.synthesize_stream_raw(texto, length_scale=self.ritmo)
+            except TypeError:
+                yield from self.voice.synthesize_stream_raw(texto)
+            return
+        for ch in self.voice.synthesize(texto):
+            data = getattr(ch, "audio_int16_bytes", None)
+            yield data if data is not None else bytes(ch)
+
+    def say(self, texto: str) -> None:
+        import numpy as np
+        import sounddevice as sd
+        partes = [np.frombuffer(c, dtype=np.int16) for c in self._chunks(texto) if c]
+        if not partes:
+            return
+        sd.play(np.concatenate(partes), self.rate)
+        sd.wait()
 
 
 def beep(tipo: str = "wake") -> None:
@@ -33,32 +69,23 @@ def beep(tipo: str = "wake") -> None:
         pass
 
 
-class _Piper:
-    """Voz neural local. Devuelve False si no se puede usar."""
-
-    def __init__(self, modelo: str):
-        from piper.voice import PiperVoice  # type: ignore
-        import sounddevice as sd  # noqa: F401  (se usa al hablar)
-        self.voice = PiperVoice.load(str(modelo))
-        self.rate = int(self.voice.config.sample_rate)
-
-    def _chunks(self, texto: str):
-        # La API de Piper cambió entre versiones: soportamos las dos.
-        if hasattr(self.voice, "synthesize_stream_raw"):
-            yield from self.voice.synthesize_stream_raw(texto)
-            return
-        for ch in self.voice.synthesize(texto):
-            data = getattr(ch, "audio_int16_bytes", None)
-            yield data if data is not None else bytes(ch)
-
-    def say(self, texto: str) -> None:
-        import numpy as np
-        import sounddevice as sd
-        partes = [np.frombuffer(c, dtype=np.int16) for c in self._chunks(texto) if c]
-        if not partes:
-            return
-        sd.play(np.concatenate(partes), self.rate)
-        sd.wait()
+def elegir_voz_sapi(voces, genero: str = "masculina"):
+    """De las voces de Windows, la mejor que haya: español y del género pedido."""
+    quiere_m = genero.startswith("m")
+    deseadas = MASCULINAS if quiere_m else FEMENINAS
+    evitar = FEMENINAS if quiere_m else MASCULINAS
+    espanolas = [v for v in voces
+                 if any(t in f"{v.id} {v.name}".lower() for t in ESPANOL)]
+    candidatas = espanolas or list(voces)
+    for v in candidatas:
+        blob = f"{v.id} {v.name}".lower()
+        if any(t in blob for t in deseadas):
+            return v
+    for v in candidatas:
+        blob = f"{v.id} {v.name}".lower()
+        if not any(t in blob for t in evitar):
+            return v
+    return candidatas[0] if candidatas else None
 
 
 class Speaker:
@@ -92,7 +119,7 @@ class Speaker:
             log.info("Piper: no está el modelo en %s, uso la voz de Windows.", ruta)
             return None
         try:
-            motor = _Piper(ruta)
+            motor = _Piper(ruta, float(self.opts.get("ritmo", 0.95)))
             log.info("Voz: Piper (%s)", ruta.name)
             self.motor = "piper"
             return motor
@@ -104,14 +131,14 @@ class Speaker:
         try:
             import pyttsx3
             engine = pyttsx3.init()
-            for v in engine.getProperty("voices"):
-                blob = f"{v.id} {v.name}".lower()
-                if any(t in blob for t in ("spanish", "es-", "es_", "sabina", "helena",
-                                           "raul", "laura", "pablo")):
-                    engine.setProperty("voice", v.id)
-                    break
-            engine.setProperty("rate", int(self.opts.get("velocidad", 175)))
-            log.info("Voz: SAPI (Windows)")
+            elegida = elegir_voz_sapi(engine.getProperty("voices"),
+                                      self.opts.get("genero", "masculina"))
+            if elegida is not None:
+                engine.setProperty("voice", elegida.id)
+                log.info("Voz: SAPI (%s)", elegida.name)
+            else:
+                log.info("Voz: SAPI (la predeterminada)")
+            engine.setProperty("rate", int(self.opts.get("velocidad", 185)))
             self.motor = "sapi"
 
             class _Sapi:
