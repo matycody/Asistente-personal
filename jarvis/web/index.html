@@ -134,6 +134,22 @@ ul.pend button:hover{color:var(--verde)}
 .datos div{display:flex;justify-content:space-between;gap:10px}
 .datos span:first-child{color:var(--tenue)}
 .datos span:last-child{font-family:var(--mono);font-size:11.5px;text-align:right}
+.buscador{width:100%;background:rgba(94,234,255,.05);border:1px solid var(--linea);
+  border-radius:9px;padding:9px 13px;color:var(--txt);font-family:var(--sans);
+  font-size:13px;outline:none;margin-bottom:10px}
+.buscador:focus{border-color:color-mix(in srgb,var(--acento) 55%,transparent)}
+.conteo{font-family:var(--mono);font-size:10px;color:var(--tenue);margin-bottom:10px}
+ul.apps{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));
+  gap:7px;max-height:62vh;overflow:auto}
+ul.apps li{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:8px 11px;
+  border-radius:9px;background:rgba(94,234,255,.04);border:1px solid rgba(94,234,255,.08);
+  cursor:pointer;transition:.14s}
+ul.apps li:hover{background:color-mix(in srgb,var(--acento) 13%,transparent);
+  border-color:var(--acento)}
+ul.apps .t{font-family:var(--mono);font-size:8.5px;letter-spacing:.11em;color:var(--acento);
+  background:color-mix(in srgb,var(--acento) 13%,transparent);border-radius:4px;
+  padding:2px 5px;flex:none;text-transform:uppercase}
+ul.apps .nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 table.ayuda{width:100%;border-collapse:collapse;font-size:13px}
 table.ayuda td{padding:8px 10px;border-bottom:1px solid rgba(94,234,255,.07);vertical-align:top}
 table.ayuda td:first-child{color:var(--acento);font-family:var(--mono);font-size:11.5px;
@@ -180,6 +196,9 @@ footer input::placeholder{color:var(--gris)}
   <button data-v="pend">
     <svg viewBox="0 0 24 24"><path d="M9 11l2.5 2.5L16 8"/><rect x="3.5" y="4" width="17" height="16" rx="2.5"/></svg>
     <span>Pendientes</span></button>
+  <button data-v="apps">
+    <svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
+    <span>Programas</span></button>
   <button data-v="reg">
     <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
     <span>Registro</span></button>
@@ -246,6 +265,17 @@ footer input::placeholder{color:var(--gris)}
     <div class="tarjeta">
       <h2>Registro de la sesión</h2>
       <div class="reg" id="reg" style="max-height:none"></div>
+    </div>
+  </section>
+
+  <!-- ---------- programas ---------- -->
+  <section class="vista" id="v-apps">
+    <div class="tarjeta">
+      <h2>Todo lo que Jarvis puede abrir</h2>
+      <input id="buscar-app" class="buscador" placeholder="Buscar…  (programas, juegos, carpetas)"
+             autocomplete="off">
+      <div class="conteo" id="apps-conteo">cargando…</div>
+      <ul class="apps" id="apps"></ul>
     </div>
   </section>
 
@@ -317,6 +347,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.vista').forEach(x=>x.classList.remove('on'));
   b.classList.add('on'); $('#v-'+b.dataset.v).classList.add('on');
+  if(b.dataset.v === 'apps') cargarApps();
 });
 
 /* ---------- estado ---------- */
@@ -401,6 +432,41 @@ function dibujar(t){
   requestAnimationFrame(dibujar);
 }
 requestAnimationFrame(dibujar);
+
+/* ---------- programas ---------- */
+let listaApps = null;
+const TIPO = {app:'app', lnk:'app', steam:'juego', carpeta:'carpeta'};
+async function cargarApps(){
+  const cont = $('#apps'), conteo = $('#apps-conteo');
+  if(demo || !TOKEN){
+    listaApps = [{titulo:'eFootball 2024',tipo:'steam'},{titulo:'Brave',tipo:'lnk'},
+                 {titulo:'Steam',tipo:'lnk'},{titulo:'Calculadora',tipo:'app'},
+                 {titulo:'Papelera de reciclaje',tipo:'carpeta'},{titulo:'disco H (Juegos)',tipo:'carpeta'},
+                 {titulo:'Visual Studio Code',tipo:'lnk'},{titulo:'Spotify',tipo:'app'}];
+  }else if(listaApps === null){
+    try{ listaApps = await (await fetch('/indice?t=' + TOKEN)).json(); }
+    catch(e){ listaApps = []; }
+  }
+  pintarApps();
+}
+function pintarApps(){
+  const q = ($('#buscar-app').value || '').toLowerCase().trim();
+  const vistos = (listaApps||[]).filter(a => !q || a.titulo.toLowerCase().includes(q));
+  const cont = $('#apps'); cont.innerHTML = '';
+  vistos.slice(0, 400).forEach(a => {
+    const li = document.createElement('li');
+    const t = document.createElement('span'); t.className='t'; t.textContent = TIPO[a.tipo]||a.tipo;
+    const n = document.createElement('span'); n.className='nom'; n.textContent = a.titulo;
+    li.append(t, n);
+    li.title = 'abrir ' + a.titulo;
+    li.onclick = () => enviar('jarvis abrí ' + a.titulo);
+    cont.appendChild(li);
+  });
+  $('#apps-conteo').textContent = (listaApps||[]).length
+    ? `${vistos.length} de ${listaApps.length}  ·  decí «Jarvis, abrí …» o tocá uno`
+    : 'todavía no armé la lista — probá en unos segundos';
+}
+$('#buscar-app').oninput = pintarApps;
 
 /* ---------- servidor ---------- */
 async function post(ruta, cuerpo){

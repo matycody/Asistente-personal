@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import difflib
 import re
-import unicodedata
 from dataclasses import dataclass
+
+from .texto import norm   # re-exportado: otros módulos lo importan desde acá
 
 
 @dataclass
@@ -49,20 +50,17 @@ def _numero(token: str) -> int | None:
     return NUMEROS.get(token)
 
 
-def norm(text: str) -> str:
-    text = unicodedata.normalize("NFD", text.lower())
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-    text = re.sub(r"[^a-z0-9: ]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
 def strip_wake(text: str) -> tuple[bool, str]:
-    """Devuelve (había palabra de activación, resto de la frase normalizado)."""
+    """Devuelve (dijo su nombre, el resto de la frase).
+
+    El nombre vale en cualquier lugar: "jarvis abrí brave", "abrí brave jarvis" o
+    "abrí, jarvis, el brave" son lo mismo. Se sacan todas las menciones y queda la orden.
+    """
     n = norm(text)
-    m = WAKE_RE.search(n)
-    if not m:
+    if not WAKE_RE.search(n):
         return False, n
-    return True, (n[m.end():]).strip()
+    resto = re.sub(r"\s+", " ", WAKE_RE.sub(" ", n)).strip()
+    return True, resto
 
 
 def split_commands(text: str) -> list[str]:
@@ -112,7 +110,27 @@ def resolve_target(target: str, cfg: dict) -> Intent:
     if close:
         kind, val = table[close[0]]
         return Intent(kind, val, label=close[0])
+    # todo lo instalado en la PC: menú Inicio, escritorio, juegos de Steam, discos
+    desde_indice = buscar_en_indice(t)
+    if desde_indice:
+        return desde_indice
     return Intent("unknown_target", t, label=t)
+
+
+TIPO_A_INTENT = {"app": "open_app_id", "lnk": "open_shell",
+                 "steam": "open_steam", "carpeta": "open_path"}
+
+
+def buscar_en_indice(texto: str) -> Intent | None:
+    """Busca en el índice de la PC. Import tardío: no todos los módulos lo necesitan."""
+    from . import indice
+    dato = indice.buscar(texto)
+    if not dato:
+        return None
+    kind = TIPO_A_INTENT.get(dato.get("tipo", ""))
+    if not kind:
+        return None
+    return Intent(kind, dato["destino"], label=dato.get("titulo", texto))
 
 
 def parse_one(segment: str, cfg: dict) -> Intent | None:

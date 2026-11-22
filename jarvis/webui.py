@@ -136,6 +136,19 @@ class WebUI:
                     return self._no()
                 if ruta == "/eventos":
                     return self._sse()
+                if ruta == "/indice":
+                    from . import indice
+                    vistos, lista = set(), []
+                    for dato in indice.cargar().values():
+                        clave = (dato.get("titulo"), dato.get("tipo"))
+                        if clave in vistos:
+                            continue
+                        vistos.add(clave)
+                        lista.append({"titulo": dato.get("titulo", ""),
+                                      "tipo": dato.get("tipo", "")})
+                    lista.sort(key=lambda d: d["titulo"].lower())
+                    return self._ok(json.dumps(lista, ensure_ascii=False).encode(),
+                                    "application/json")
                 nombre = "index.html" if ruta == "/" else ruta.lstrip("/")
                 archivo = (WEB / nombre).resolve()
                 if WEB not in archivo.parents or not archivo.is_file():

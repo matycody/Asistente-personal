@@ -33,8 +33,10 @@ TASK_ACTIONS = {"brief", "weather", "time", "note_list", "note_clear", "study"}
 
 PROMPT = """Sos el traductor de órdenes de voz de un asistente de PC con Windows. El usuario habla en español rioplatense.
 Respondé SOLO un JSON: {{"actions": [...]}} con a lo sumo 5 acciones, en el orden pedido. Acciones permitidas:
-- {{"kind":"open","name":"<nombre>"}}  abrir una app, carpeta o sitio. Usá EXACTAMENTE uno de estos nombres:
-  {names}
+- {{"kind":"open","name":"<nombre>"}}  abrir CUALQUIER programa, juego, carpeta o sitio de
+  esta PC. Poné el nombre tal como lo dijo el usuario, sin artículos: "efootball", "steam",
+  "papelera". Jarvis lo busca después entre todo lo instalado, así que no inventes rutas.
+  Estos nombres seguro existen: {names}
 - {{"kind":"drive","letter":"H"}}  abrir un disco por su letra
 - {{"kind":"search","query":"..."}}  buscar en Google
 - {{"kind":"youtube_search","query":"..."}}  buscar en YouTube

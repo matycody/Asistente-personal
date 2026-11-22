@@ -35,13 +35,17 @@ Para traer mejoras: `git pull` y listo.
 
 ## 2. Qué le podés decir
 
-Empezá con **"Jarvis"**. Suena un pitido corto cuando te escuchó, y después de una orden
-sigue atento 6 segundos sin que repitas el nombre.
+Decí **"Jarvis"** en cualquier parte de la frase: al principio, al final o en el medio.
+"Jarvis, abrí Brave", "abrí Brave, Jarvis" y "abrí, Jarvis, el Brave" son lo mismo.
+Suena un pitido corto cuando te escuchó, y después de una orden sigue atento 6 segundos
+sin que repitas el nombre.
 
 ### La PC
 | Decís | Hace |
 |---|---|
 | "Jarvis, abrí Brave" | abre Brave |
+| "abrí el eFootball, Jarvis" | abre un juego de Steam |
+| "abrí la papelera de reciclaje" | carpetas del sistema |
 | "abrí el explorador y entrá al disco H" | dos acciones seguidas |
 | "abrí YouTube" / "abrí Computrabajo" | abre el sitio |
 | "buscá recetas de milanesa" / "buscá lofi en YouTube" | búsqueda web |
@@ -113,7 +117,38 @@ La dirección queda siempre en la consola y en el log.
 
 ---
 
-## 4. Órdenes libres (opcional, con Ollama)
+## 4. Todo lo que hay en tu PC
+
+La primera vez que arranca, Jarvis hace un inventario de la máquina en segundo plano:
+
+- **todo el menú Inicio**: programas de escritorio y apps de la Microsoft Store
+- **los accesos directos** del escritorio
+- **los juegos de Steam**, con su identificador para lanzarlos
+- **los discos conectados**, por letra y por etiqueta ("abrí el disco de juegos")
+- **carpetas del sistema**: papelera, panel de control, impresoras, descargas…
+
+Después alcanza con nombrarlos: *"Jarvis, abrí el eFootball"*, *"abrí la papelera, Jarvis"*.
+
+En la sección **Programas** de la interfaz están todos listados, con buscador. Tocá
+cualquiera para abrirlo, o para ver cómo se llama exactamente.
+
+Para rearmar la lista cuando instalás algo nuevo:
+
+```
+.venv\Scripts\python.exe -m jarvis --indexar
+```
+
+**Cómo elige.** Primero lo que vos pusiste en `config.json` (eso siempre manda), después
+el nombre exacto, después el nombre completo dentro de la frase y recién al final algo
+parecido, con un criterio exigente para que no abra cualquier cosa. Si no está seguro,
+prefiere decirte que no lo encontró.
+
+**Qué NO hace.** Abre cosas, no las borra ni las desinstala. Apagar, reiniciar y borrar
+pendientes siguen pidiendo que digas "confirmo".
+
+---
+
+## 5. Órdenes libres (opcional, con Ollama)
 
 Sin esto Jarvis entiende las frases de las tablas de arriba. Con un modelo local además
 entiende órdenes **con tus palabras** ("llevame a lo que bajé hoy", "no te olvides de
@@ -138,7 +173,7 @@ Para cambiar de modelo o apagarlo, en `config.json`:
 
 ---
 
-## 5. La voz
+## 6. La voz
 
 Para elegirla, corré **`voz_natural.bat`** y seguí el menú. Todas son gratis y ninguna
 pide cuenta ni clave.
@@ -189,7 +224,7 @@ Otros ajustes en `config.json`:
 
 ---
 
-## 6. Que vaya más rápido
+## 7. Que vaya más rápido
 
 Medí cuánto tarda **en tu PC**:
 
@@ -222,7 +257,7 @@ solo entra cuando decís algo que las reglas no conocen.
 
 ---
 
-## 7. Que entienda mejor
+## 8. Que entienda mejor
 
 Jarvis ahora **recuerda las últimas dos vueltas**, así podés encadenar ("abrí Brave"…
 "ahora buscá recetas ahí"), y responde preguntas sueltas con voz.
@@ -239,7 +274,7 @@ en vez de a ojo.
 
 ---
 
-## 8. Configurarlo a tu gusto
+## 9. Configurarlo a tu gusto
 
 Todo se toca en **`config.json`**. Solo escribís lo que querés cambiar; el resto sale de
 los valores de fábrica (`jarvis/config.py`).
@@ -278,7 +313,7 @@ ruta completa al `.exe`. El clima sale de Open-Meteo, que es gratis y no pide cl
 
 ---
 
-## 9. Si algo no anda
+## 10. Si algo no anda
 
 | Problema | Qué hacer |
 |---|---|
@@ -289,6 +324,7 @@ ruta completa al `.exe`. El clima sale de Open-Meteo, que es gratis y no pide cl
 | La voz suena robótica | `voz_natural.bat` y elegí la opción 1 |
 | La voz suena femenina | tu Windows no tiene voces de hombre: `voz_natural.bat`, opción 1 |
 | No arranca con Windows | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 estado` |
+| No encuentra un programa | `python -m jarvis --indexar`, y fijate el nombre exacto en la sección Programas |
 | No se abre la interfaz | mirá la dirección en la consola y pegala en el navegador |
 | Querés sacar el autoarranque | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 quitar` |
 | Quiero ver qué pasó | `notepad %LOCALAPPDATA%\Jarvis\jarvis.log` |
@@ -297,7 +333,7 @@ El log anota lo que escuchó, lo que descartó por ruido y cada acción. Si algo
 
 ---
 
-## 10. Cómo está hecho
+## 11. Cómo está hecho
 
 | Archivo | Qué hace |
 |---|---|
@@ -307,6 +343,7 @@ El log anota lo que escuchó, lo que descartó por ruido y cada acción. Si algo
 | `jarvis/assistant.py` | palabra de activación, ventana de seguimiento, confirmaciones |
 | `jarvis/actions.py` | ejecuta las intenciones en Windows |
 | `jarvis/tasks.py` | clima, pendientes, empleo, facultad |
+| `jarvis/indice.py` | el inventario de la PC: menú Inicio, Steam, discos, carpetas |
 | `jarvis/webui.py` + `web/index.html` | la interfaz: servidor local y página |
 | `jarvis/hud.py` / `tray.py` | ventana simple de respaldo e ícono del reloj |
 | `jarvis/speaker.py` / `voz.py` | los tres motores de voz, el diagnóstico y los pitidos |

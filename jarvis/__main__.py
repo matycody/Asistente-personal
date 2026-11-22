@@ -5,6 +5,7 @@
     python -m jarvis --sin-hud      # sin interfaz (solo consola)
     python -m jarvis --banco        # mide qué tan rápido va en tu PC
     python -m jarvis --voz          # prueba la voz y dice qué motor anda
+    python -m jarvis --indexar      # rearma la lista de todo lo que puede abrir
 """
 from __future__ import annotations
 
@@ -73,9 +74,27 @@ def armar(cfg: dict, args, ui, pausado: threading.Event):
     return speaker, asistente, procesar, refrescar_pendientes
 
 
+def indexar_en_segundo_plano(ui) -> None:
+    """La primera vez arma el índice de la PC sin hacer esperar a nadie."""
+    from . import indice
+
+    def trabajo():
+        try:
+            if indice.cargar():
+                return
+            ui.log("buscando programas y juegos instalados…")
+            datos = indice.reindexar(avisar=lambda t: log.info("indice: %s", t))
+            ui.log(f"puedo abrir {len(datos)} cosas de tu PC")
+        except Exception:
+            log.exception("No pude armar el índice")
+
+    threading.Thread(target=trabajo, daemon=True).start()
+
+
 def bucle_voz(cfg, args, ui, pausado, parar, partes=None) -> None:
     """Escucha el micrófono hasta que se pida parar. Corre en su propio hilo."""
     speaker, asistente, procesar, refrescar = partes or armar(cfg, args, ui, pausado)
+    indexar_en_segundo_plano(ui)
     try:
         from .listener import Listener
         ui.status("iniciando")
@@ -98,6 +117,7 @@ def bucle_voz(cfg, args, ui, pausado, parar, partes=None) -> None:
         _t.sleep(0.05)
     if speaker.motor == "ninguno":
         ui.log("sin voz: corré  python -m jarvis --voz")
+    from . import indice
     if hasattr(ui, "info"):
         ui.info({
             "whisper": f"{cfg['whisper_model']} · {listener.device}",
@@ -105,7 +125,7 @@ def bucle_voz(cfg, args, ui, pausado, parar, partes=None) -> None:
             "voz": speaker.motor,
             "detalle": {"Navegador": cfg.get("browser") or "el de Windows",
                         "Ubicación": cfg["ubicacion"]["nombre"],
-                        "Órdenes fijas": "instantáneas",
+                        "Puede abrir": f"{len(indice.cargar())} cosas",
                         "Modo": "simulación" if args.dry_run else "normal"},
         })
     refrescar()
@@ -152,6 +172,8 @@ def main() -> None:
     ap.add_argument("--sin-hud", dest="sin_hud", action="store_true", help="sin interfaz")
     ap.add_argument("--banco", action="store_true", help="medir velocidad en esta PC")
     ap.add_argument("--voz", action="store_true", help="probar la voz y diagnosticar")
+    ap.add_argument("--indexar", action="store_true",
+                    help="rearmar el índice de programas, juegos y carpetas")
     ap.add_argument("--fijar-voz", dest="fijar_voz", nargs=2, metavar=("MOTOR", "VOZ"),
                     help="guardar el motor y la voz en config.json")
     args = ap.parse_args()
@@ -159,6 +181,10 @@ def main() -> None:
     setup_logging()
     cfg = load_config()
 
+    if args.indexar:
+        from .indice import reindexar
+        reindexar()
+        return
     if args.fijar_voz:
         from .voz import fijar_voz
         return fijar_voz(*args.fijar_voz)

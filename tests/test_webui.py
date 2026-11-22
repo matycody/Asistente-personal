@@ -119,6 +119,36 @@ class Web(unittest.TestCase):
         self.assertNotEqual(otra.puerto, self.ui.puerto)
 
 
+class Indice(unittest.TestCase):
+    def setUp(self):
+        from unittest import mock
+
+        from jarvis import indice
+        self.pausado, self.parar = threading.Event(), threading.Event()
+        self.ui = WebUI(self.pausado, self.parar, puerto=8920)
+        self.ui.iniciar()
+        self.addCleanup(self.ui.servidor.server_close)
+        self.addCleanup(self.ui.servidor.shutdown)
+        parche = mock.patch.object(indice, "_cache", {
+            "efootball": {"titulo": "eFootball 2024", "tipo": "steam", "destino": "1"},
+            "efootball 2024": {"titulo": "eFootball 2024", "tipo": "steam", "destino": "1"},
+            "brave": {"titulo": "Brave", "tipo": "lnk", "destino": "x"},
+        })
+        parche.start()
+        self.addCleanup(parche.stop)
+
+    def test_lista_sin_repetidos_y_ordenada(self):
+        url = f"http://127.0.0.1:{self.ui.puerto}/indice?t={self.ui.token}"
+        datos = json.loads(urllib.request.urlopen(url, timeout=4).read())
+        self.assertEqual(datos, [{"titulo": "Brave", "tipo": "lnk"},
+                                 {"titulo": "eFootball 2024", "tipo": "steam"}])
+
+    def test_el_indice_tambien_pide_token(self):
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(f"http://127.0.0.1:{self.ui.puerto}/indice", timeout=4)
+        self.assertEqual(e.exception.code, 403)
+
+
 class Integracion(unittest.TestCase):
     """La interfaz conectada al asistente de verdad, como lo arma __main__."""
 

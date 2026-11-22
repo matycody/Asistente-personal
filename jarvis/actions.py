@@ -88,6 +88,24 @@ class Executor:
             es_archivo = not path.startswith("shell:") and os.path.isfile(path)
             ok = self.open_file(path) if es_archivo else self.open_folder(path)
             return f"Abriendo {it.label}." if ok else f"No encuentro {it.label}."
+        if k == "open_app_id":
+            # entradas del menú Inicio (incluidas las de la Store): shell:AppsFolder
+            self._record(f"abrir app del menú {it.arg}")
+            if self.dry:
+                return f"Abriendo {it.label}."
+            try:
+                subprocess.Popen(["explorer.exe", f"shell:AppsFolder\\{it.arg}"])
+                return f"Abriendo {it.label}."
+            except Exception:
+                log.exception("No pude abrir %s", it.arg)
+                return f"No pude abrir {it.label}."
+        if k == "open_shell":
+            self._record(f"abrir {it.arg}")
+            return f"Abriendo {it.label}." if self._start(it.arg) else f"No pude abrir {it.label}."
+        if k == "open_steam":
+            self._record(f"abrir juego de steam {it.arg}")
+            ok = self._start(f"steam://rungameid/{it.arg}")
+            return f"Abriendo {it.label}." if ok else f"No pude abrir {it.label}."
         if k == "open_app":
             self._record(f"abrir app {it.arg}")
             return f"Abriendo {it.label}." if self._start(*it.arg.split()) else f"No pude abrir {it.label}."
