@@ -16,6 +16,8 @@ DEFAULT_CONFIG = {
     "whisper_model": "small",
     # Segundos que queda escuchando sin decir "Jarvis" después de un comando
     "followup_seconds": 6,
+    # Órdenes libres con Ollama (https://ollama.com). Si no está instalado, se ignora sin problema.
+    "llm": {"enabled": True, "model": "qwen2.5:3b", "url": "http://127.0.0.1:11434", "timeout": 25},
     "apps": {
         "brave": "brave",
         "chrome": "chrome",

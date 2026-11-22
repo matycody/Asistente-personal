@@ -37,7 +37,8 @@ def main() -> None:
     log = logging.getLogger("jarvis")
     cfg = load_config()
     speaker = Speaker(enabled=not args.mute and not args.text)
-    assistant = Assistant(cfg, Executor(cfg, dry_run=args.dry_run))
+    from .llm import OllamaPlanner
+    assistant = Assistant(cfg, Executor(cfg, dry_run=args.dry_run), planner=OllamaPlanner(cfg))
 
     if args.text:
         print("Modo texto. Escribí órdenes (ej: 'jarvis abrí brave'). Ctrl+C para salir.")

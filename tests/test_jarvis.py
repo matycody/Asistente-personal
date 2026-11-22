@@ -93,5 +93,73 @@ class Flow(unittest.TestCase):
         self.assertEqual(self.ex.done, [])
 
 
+
+import json as _json
+from jarvis.llm import OllamaPlanner
+
+
+def fake(actions):
+    def transport(url, payload, timeout):
+        return {"message": {"content": _json.dumps({"actions": actions})}}
+    return transport
+
+
+def broken(url, payload, timeout):
+    raise ConnectionError("ollama apagado")
+
+
+class FreeCommands(unittest.TestCase):
+    def make(self, transport):
+        self.t = 0.0
+        self.ex = Executor(CFG, dry_run=True)
+        return Assistant(CFG, self.ex, clock=lambda: self.t,
+                         planner=OllamaPlanner(CFG, transport=transport))
+
+    def test_llm_used_when_rules_fail(self):
+        a = self.make(fake([{"kind": "open", "name": "descargas"}, {"kind": "open", "name": "brave"}]))
+        a.handle("jarvis llevame a lo que baje hoy y dejame navegar")
+        self.assertEqual(self.ex.done, ["abrir carpeta " + __import__("os").path.expanduser("~/Downloads"),
+                                        "abrir app brave"])
+
+    def test_rules_take_priority(self):
+        a = self.make(fake([{"kind": "open", "name": "calculadora"}]))
+        a.handle("jarvis abrí brave")
+        self.assertEqual(self.ex.done, ["abrir app brave"])
+
+    def test_invalid_actions_are_dropped(self):
+        a = self.make(fake([{"kind": "open", "name": "formatear disco"},
+                            {"kind": "run", "cmd": "del /s *"},
+                            {"kind": "system", "name": "rm_everything"}]))
+        out = a.handle("jarvis hacé algo raro")
+        self.assertEqual(out, ["No entendí."])
+        self.assertEqual(self.ex.done, [])
+
+    def test_say(self):
+        a = self.make(fake([{"kind": "say", "text": "Son las diez."}]))
+        self.assertEqual(a.handle("jarvis qué hora es"), ["Son las diez."])
+
+    def test_shutdown_from_llm_still_needs_confirmation(self):
+        a = self.make(fake([{"kind": "system", "name": "shutdown"}]))
+        out = a.handle("jarvis ya me voy a dormir, dejá todo")
+        self.assertIn("confirmo", out[0])
+        self.assertEqual(self.ex.done, [])
+
+    def test_llm_down_falls_back(self):
+        a = self.make(broken)
+        self.assertEqual(a.handle("jarvis hacé algo raro"), ["No entendí."])
+
+    def test_no_llm_on_followup_noise(self):
+        a = self.make(fake([{"kind": "say", "text": "hola"}]))
+        a.handle("jarvis abrí brave")
+        self.t = 2
+        self.assertEqual(a.handle("che pasame la sal"), [])
+
+    def test_wake_then_free_command_uses_llm(self):
+        a = self.make(fake([{"kind": "say", "text": "ok"}]))
+        a.handle("jarvis")
+        self.t = 2
+        self.assertEqual(a.handle("contame algo"), ["ok"])
+
+
 if __name__ == "__main__":
     unittest.main()

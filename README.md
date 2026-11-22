@@ -27,6 +27,18 @@ Empezá con "Jarvis". Después de una orden escucha 6 segundos más sin que repi
 | "bloqueá la PC" | bloquea la sesión |
 | "apagá la PC" / "reiniciá" | pide que digas "confirmo" |
 
+## Órdenes libres (opcional, con Ollama)
+Sin esto Jarvis solo entiende las frases de la tabla. Con un modelo local entiende órdenes "con tus palabras"
+("llevame a lo que bajé hoy", "qué hora es") y sigue sin salir de tu PC.
+1. Instalá Ollama desde https://ollama.com y en una consola corré `ollama pull qwen2.5:3b` (unos 2 GB).
+2. Dejá Ollama abierto (se inicia solo con Windows) y reiniciá Jarvis. No hay nada más que configurar.
+3. El modelo se consulta **solo si las frases fijas no entienden** y solo cuando decís "Jarvis" directamente.
+4. Seguridad: el modelo no ejecuta nada. Solo elige entre las acciones de la lista (abrir apps/carpetas/sitios
+   que existen en `config.json`, discos, búsquedas, volumen, etc.). Cualquier otra cosa se descarta, y
+   apagar/reiniciar siguen pidiendo "confirmo".
+Para cambiar de modelo o apagarlo: en `config.json` agregá `"llm": {"model": "llama3.2:3b"}` o `"llm": {"enabled": false}`.
+Si Ollama no está instalado o está apagado, Jarvis funciona igual y lo anota en el log.
+
 ## Agregar tus cosas
 Editá `config.json`. Ejemplo:
 ```json
@@ -49,5 +61,5 @@ Después decís "Jarvis, abrí tesis". Si una app no se abre, poné la ruta comp
   `listener.py` es el micrófono + Whisper; `speaker.py` es la voz.
 
 ## Pendiente / ideas
-Sumar un modelo de lenguaje local (Ollama) o Claude para órdenes libres, tareas (empleo, facultad, tesis),
+Tareas (empleo, facultad, tesis),
 ícono en la bandeja y palabra de activación más liviana.

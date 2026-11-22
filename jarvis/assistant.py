@@ -15,11 +15,13 @@ NO = {"no", "cancela", "cancelar", "cancelalo", "dejalo", "nada"}
 
 
 class Assistant:
-    def __init__(self, cfg: dict, executor: Executor, clock=time.monotonic):
+    def __init__(self, cfg: dict, executor: Executor, clock=time.monotonic, planner=None):
         self.cfg = cfg
         self.ex = executor
         self.clock = clock
+        self.planner = planner          # opcional: modelo para órdenes libres
         self.awake_until = 0.0
+        self.expect_command = False     # dijo solo "Jarvis" y espero la orden
         self.pending: tuple[Intent, float] | None = None
 
     def _extend(self) -> None:
@@ -49,12 +51,21 @@ class Assistant:
             return []
         if heard_wake and not rest:
             self._extend()
+            self.expect_command = True
             return ["Decime."]
 
+        addressed = heard_wake or self.expect_command   # me hablan directamente
+        self.expect_command = False
         intents = parse(rest, self.cfg)
+        # Si las frases fijas no alcanzan, el modelo intenta entender la orden libre.
+        # Solo cuando me hablan directo: en la ventana de seguimiento sería gastar CPU con ruido.
+        if self.planner and addressed and (not intents or all(i.kind == "unknown_target" for i in intents)):
+            planned = self.planner.plan(rest)
+            if planned:
+                intents = planned
         if not intents:
             # Sin palabra de activación (ventana de seguimiento) ignoramos el ruido en silencio
-            return ["No entendí."] if heard_wake else []
+            return ["No entendí."] if addressed else []
 
         replies = []
         for it in intents:

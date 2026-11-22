@@ -114,6 +114,8 @@ class Executor:
             if not self.dry:
                 subprocess.run(["shutdown", "/r", "/t", "10"])
             return "Reiniciando en diez segundos."
+        if k == "say":
+            return it.arg
         if k == "unknown_target":
             return f"No sé abrir {it.arg}. Agregalo en config punto json."
         return "No entendí."
