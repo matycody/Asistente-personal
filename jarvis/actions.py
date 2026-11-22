@@ -5,7 +5,6 @@ import logging
 import os
 import subprocess
 import sys
-import webbrowser
 from urllib.parse import quote_plus
 
 from .commands import Intent
@@ -55,12 +54,10 @@ class Executor:
     # ---------- las usa también tasks.py ----------
     def open_url(self, url: str) -> bool:
         self._record(f"abrir web {url}")
-        browser = (self.cfg.get("browser") or "").strip()
         if self.dry:
             return True
-        if browser and self._start(browser, url):
-            return True
-        return webbrowser.open(url)
+        from .navegador import abrir
+        return abrir(url, (self.cfg.get("browser") or "").strip())
 
     def open_folder(self, path: str) -> bool:
         path = os.path.expanduser(path)

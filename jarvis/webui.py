@@ -226,19 +226,10 @@ class WebUI:
         log.info("Interfaz web en %s", self.url)
         return self.url
 
-    def abrir_navegador(self, navegador: str = "") -> None:
-        """Abre la interfaz. Con --app queda como una ventana propia, sin barra."""
-        import subprocess
-        import sys
-        import webbrowser
-        if sys.platform == "win32" and navegador:
-            try:
-                subprocess.Popen(["cmd", "/c", "start", "", navegador, f"--app={self.url}"],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return
-            except Exception:
-                log.debug("No pude abrir en modo app", exc_info=True)
-        try:
-            webbrowser.open(self.url)
-        except Exception:
-            print(f"Abrí esta dirección en el navegador: {self.url}")
+    def abrir_navegador(self, navegador: str = "") -> bool:
+        """Abre la interfaz. En Brave/Chrome/Edge queda como ventana propia, sin barra."""
+        from .navegador import abrir
+        ok = abrir(self.url, navegador, modo_app=True)
+        if not ok:
+            print(f"\nNo pude abrir el navegador solo. Pegá esta dirección:\n  {self.url}\n")
+        return ok

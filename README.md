@@ -104,6 +104,9 @@ mismo, **en tu PC**: no sale a internet y nadie más la puede ver.
 - Queda un **ícono al lado del reloj** para pausar o cerrar sin buscar la ventana.
 
 Se abre como ventana propia (sin barra de direcciones) si tenés Brave, Chrome o Edge.
+Jarvis busca el ejecutable en el registro de Windows y en las carpetas habituales; si no
+lo encuentra, usa el navegador predeterminado. La dirección siempre queda impresa en la
+consola, así la podés pegar a mano.
 
 **Seguridad.** El servidor escucha solo en `127.0.0.1`, así que no se ve desde otra
 computadora. Además, cada arranque genera un código al azar que va en la dirección: sin
@@ -325,7 +328,8 @@ ruta completa al `.exe`. El clima sale de Open-Meteo, que es gratis y no pide cl
 | La voz suena femenina | tu Windows no tiene voces de hombre: `voz_natural.bat`, opción 1 |
 | No arranca con Windows | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 estado` |
 | No encuentra un programa | `python -m jarvis --indexar`, y fijate el nombre exacto en la sección Programas |
-| No se abre la interfaz | mirá la dirección en la consola y pegala en el navegador |
+| No se abre la interfaz | la dirección queda impresa en la consola: pegala en el navegador |
+| No abre Brave | revisá `"browser"` en `config.json`, o dejalo en `""` para el predeterminado |
 | Querés sacar el autoarranque | `powershell -ExecutionPolicy Bypass -File autoarranque.ps1 quitar` |
 | Quiero ver qué pasó | `notepad %LOCALAPPDATA%\Jarvis\jarvis.log` |
 
@@ -344,6 +348,8 @@ El log anota lo que escuchó, lo que descartó por ruido y cada acción. Si algo
 | `jarvis/actions.py` | ejecuta las intenciones en Windows |
 | `jarvis/tasks.py` | clima, pendientes, empleo, facultad |
 | `jarvis/indice.py` | el inventario de la PC: menú Inicio, Steam, discos, carpetas |
+| `jarvis/navegador.py` | encuentra y lanza el navegador |
+| `jarvis/powershell.py` | corre PowerShell sin que la codificación rompa nada |
 | `jarvis/webui.py` + `web/index.html` | la interfaz: servidor local y página |
 | `jarvis/hud.py` / `tray.py` | ventana simple de respaldo e ícono del reloj |
 | `jarvis/speaker.py` / `voz.py` | los tres motores de voz, el diagnóstico y los pitidos |

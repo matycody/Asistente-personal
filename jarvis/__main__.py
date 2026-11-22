@@ -219,9 +219,11 @@ def main() -> None:
             if cfg.get("bandeja", True):
                 from .tray import iniciar
                 iniciar(pausado, parar, ui)
+            print("\n" + "=" * 62)
+            print(f"  INTERFAZ:  {ui.url}")
+            print("=" * 62 + "\n")
             if cfg.get("abrir_al_arrancar", True):
                 ui.abrir_navegador(cfg.get("browser", ""))
-            print(f"Interfaz: {ui.url}")
             return bucle_voz(cfg, args, ui, pausado, parar, partes)
 
     # ---------- ventana simple (tkinter) ----------
