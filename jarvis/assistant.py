@@ -9,17 +9,20 @@ from .commands import Intent, norm, parse, strip_wake
 
 log = logging.getLogger("jarvis")
 
-NEEDS_CONFIRM = {"shutdown", "restart"}
+# Acciones que no se pueden deshacer: siempre preguntan antes
+NEEDS_CONFIRM = {"shutdown", "restart", "note_clear"}
 YES = {"confirmo", "si", "dale", "hacelo", "confirmado", "ok", "aceptar"}
 NO = {"no", "cancela", "cancelar", "cancelalo", "dejalo", "nada"}
 
 
 class Assistant:
-    def __init__(self, cfg: dict, executor: Executor, clock=time.monotonic, planner=None):
+    def __init__(self, cfg: dict, executor: Executor, clock=time.monotonic, planner=None,
+                 on_wake=None):
         self.cfg = cfg
         self.ex = executor
         self.clock = clock
         self.planner = planner          # opcional: modelo para órdenes libres
+        self.on_wake = on_wake          # se llama al oír la palabra de activación
         self.awake_until = 0.0
         self.expect_command = False     # dijo solo "Jarvis" y espero la orden
         self.pending: tuple[Intent, float] | None = None
@@ -32,7 +35,7 @@ class Assistant:
         now = self.clock()
         heard_wake, rest = strip_wake(transcript)
 
-        # 1) Confirmación pendiente (apagar/reiniciar)
+        # 1) Confirmación pendiente (apagar, reiniciar, borrar pendientes)
         if self.pending and now < self.pending[1]:
             words = set(norm(transcript).split())
             intent = self.pending[0]
@@ -49,6 +52,8 @@ class Assistant:
         in_window = now < self.awake_until
         if not heard_wake and not in_window:
             return []
+        if heard_wake and self.on_wake:
+            self.on_wake()
         if heard_wake and not rest:
             self._extend()
             self.expect_command = True

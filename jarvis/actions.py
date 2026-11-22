@@ -9,6 +9,7 @@ import webbrowser
 from urllib.parse import quote_plus
 
 from .commands import Intent
+from .tasks import Tasks, fecha_larga, hora_corta
 
 log = logging.getLogger("jarvis")
 IS_WIN = sys.platform == "win32"
@@ -19,10 +20,14 @@ VK = {"mute": 0xAD, "vol_down": 0xAE, "vol_up": 0xAF, "next": 0xB0, "prev": 0xB1
 
 
 class Executor:
-    def __init__(self, cfg: dict, dry_run: bool = False):
+    def __init__(self, cfg: dict, dry_run: bool = False, tasks: Tasks | None = None,
+                 pausar=None):
         self.cfg = cfg
         self.dry = dry_run or not IS_WIN
         self.done: list[str] = []  # registro de lo que se ejecutó (útil para tests)
+        self.tasks = tasks if tasks is not None else Tasks(cfg, opener=self)
+        self.tasks.opener = self
+        self.pausar = pausar       # callback para dejar de escuchar
 
     # ---------- utilidades ----------
     def _record(self, what: str) -> None:
@@ -47,7 +52,9 @@ class Executor:
         r = subprocess.run(["cmd", "/c", "start", "", *args], capture_output=True)
         return r.returncode == 0
 
-    def _open_url(self, url: str) -> bool:
+    # ---------- las usa también tasks.py ----------
+    def open_url(self, url: str) -> bool:
+        self._record(f"abrir web {url}")
         browser = (self.cfg.get("browser") or "").strip()
         if self.dry:
             return True
@@ -55,30 +62,79 @@ class Executor:
             return True
         return webbrowser.open(url)
 
+    def open_folder(self, path: str) -> bool:
+        path = os.path.expanduser(path)
+        self._record(f"abrir carpeta {path}")
+        if self.dry:
+            return True
+        if not path.startswith("shell:") and not os.path.exists(path):
+            return False
+        return self._start("explorer", path)
+
+    def open_file(self, path: str) -> bool:
+        path = os.path.expanduser(path)
+        self._record(f"abrir archivo {path}")
+        if self.dry:
+            return True
+        if not os.path.exists(path):
+            return False
+        return self._start(path)
+
     # ---------- acciones ----------
     def run(self, it: Intent) -> str:
         k = it.kind
         if k == "open_path":
             path = os.path.expanduser(it.arg)
-            if not path.startswith("shell:") and not self.dry and not os.path.exists(path):
-                return f"No encuentro {it.label}."
-            self._record(f"abrir carpeta {path}")
-            ok = self._start("explorer", path) if not self.dry else True
-            return f"Abriendo {it.label}." if ok else f"No pude abrir {it.label}."
+            es_archivo = not path.startswith("shell:") and os.path.isfile(path)
+            ok = self.open_file(path) if es_archivo else self.open_folder(path)
+            return f"Abriendo {it.label}." if ok else f"No encuentro {it.label}."
         if k == "open_app":
             self._record(f"abrir app {it.arg}")
             return f"Abriendo {it.label}." if self._start(*it.arg.split()) else f"No pude abrir {it.label}."
         if k == "open_url":
-            self._record(f"abrir web {it.arg}")
-            return f"Abriendo {it.label}." if self._open_url(it.arg) else f"No pude abrir {it.label}."
+            return f"Abriendo {it.label}." if self.open_url(it.arg) else f"No pude abrir {it.label}."
         if k == "search":
-            self._record(f"buscar {it.arg}")
-            self._open_url("https://www.google.com/search?q=" + quote_plus(it.arg))
+            self.open_url("https://www.google.com/search?q=" + quote_plus(it.arg))
             return f"Buscando {it.arg}."
         if k == "search_youtube":
-            self._record(f"buscar en youtube {it.arg}")
-            self._open_url("https://www.youtube.com/results?search_query=" + quote_plus(it.arg))
+            self.open_url("https://www.youtube.com/results?search_query=" + quote_plus(it.arg))
             return f"Buscando {it.arg} en YouTube."
+
+        # ---- tareas ----
+        if k == "brief":
+            self._record("parte del día")
+            return self.tasks.parte()
+        if k == "weather":
+            self._record("clima")
+            return self.tasks.clima()
+        if k == "time":
+            now = self.tasks.now()
+            return f"Son las {hora_corta(now)} del {fecha_larga(now)}."
+        if k == "note_add":
+            self._record(f"anotar {it.arg}")
+            return self.tasks.anotar(it.arg)
+        if k == "note_list":
+            self._record("leer pendientes")
+            return self.tasks.pendientes()
+        if k == "note_done":
+            self._record(f"marcar pendiente {it.arg}")
+            return self.tasks.listo(int(it.arg))
+        if k == "note_clear":
+            self._record("borrar pendientes")
+            return self.tasks.borrar_pendientes()
+        if k == "jobs":
+            self._record(f"empleo {it.arg or 'por defecto'}")
+            return self.tasks.empleo(it.arg)
+        if k == "study":
+            self._record("facultad")
+            return self.tasks.facultad()
+        if k == "pause_listening":
+            self._record("pausar escucha")
+            if self.pausar:
+                self.pausar()
+            return "Dejo de escuchar. Reanudame desde la ventana o el ícono."
+
+        # ---- sistema ----
         if k == "volume_up":
             self._record("volumen +"); [self._tap("vol_up") for _ in range(5)]
             return "Listo."

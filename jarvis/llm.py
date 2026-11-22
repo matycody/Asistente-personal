@@ -12,13 +12,17 @@ import urllib.request
 from datetime import datetime
 
 from .commands import Intent, norm, resolve_target
+from .tasks import fecha_larga, hora_corta
 
 log = logging.getLogger("jarvis")
 
 SYSTEM_ACTIONS = {
     "volume_up", "volume_down", "mute", "play_pause", "media_next", "media_prev",
     "show_desktop", "close_window", "screenshot", "lock", "shutdown", "restart",
+    "pause_listening",
 }
+# Tareas sin argumentos
+TASK_ACTIONS = {"brief", "weather", "time", "note_list", "note_clear", "study"}
 
 PROMPT = """Sos el traductor de órdenes de voz de un asistente de PC con Windows. El usuario habla en español rioplatense.
 Respondé SOLO un JSON: {{"actions": [...]}} con a lo sumo 5 acciones, en el orden pedido. Acciones permitidas:
@@ -28,6 +32,11 @@ Respondé SOLO un JSON: {{"actions": [...]}} con a lo sumo 5 acciones, en el ord
 - {{"kind":"search","query":"..."}}  buscar en Google
 - {{"kind":"youtube_search","query":"..."}}  buscar en YouTube
 - {{"kind":"system","name":"<uno de: {system}>"}}
+- {{"kind":"task","name":"<uno de: {tasks}>"}}  brief = parte del día (fecha, clima y pendientes);
+  weather = clima; time = hora y fecha; note_list = leer los pendientes; note_clear = borrar
+  todos los pendientes; study = abrir las cosas de la facultad
+- {{"kind":"note_add","text":"..."}}  anotar algo en los pendientes
+- {{"kind":"jobs","profile":"programacion"|"electricidad"}}  abrir las búsquedas de empleo
 - {{"kind":"say","text":"..."}}  responder con voz una pregunta simple (máx. 2 frases, sin listas)
 Reglas: usá "system" SOLO si el usuario pide explícitamente volumen, pausa, silencio, bloquear, etc. Para ir a una carpeta o abrir algo, usá "open".
 Si pide algo que no podés hacer con estas acciones, usá "say" explicando brevemente que no podés.
@@ -35,21 +44,13 @@ Ejemplos:
 "llevame a lo que bajé hoy" -> {{"actions":[{{"kind":"open","name":"descargas"}}]}}
 "abrime el correo" -> {{"actions":[{{"kind":"open","name":"gmail"}}]}}
 "poneme música" -> {{"actions":[{{"kind":"open","name":"spotify"}}]}}
+"cómo viene el día" -> {{"actions":[{{"kind":"task","name":"brief"}}]}}
+"no te olvides que mañana tengo parcial" -> {{"actions":[{{"kind":"note_add","text":"mañana tengo parcial"}}]}}
+"mostrame trabajos de electricista" -> {{"actions":[{{"kind":"jobs","profile":"electricidad"}}]}}
 "qué hora es" -> {{"actions":[{{"kind":"say","text":"Son las {hora}."}}]}}
 "qué día es hoy" -> {{"actions":[{{"kind":"say","text":"Hoy es {dia}."}}]}}
 "abrí brave y buscá recetas" -> {{"actions":[{{"kind":"open","name":"brave"}},{{"kind":"search","query":"recetas"}}]}}
 """
-
-
-DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
-         "septiembre", "octubre", "noviembre", "diciembre"]
-
-
-def _fecha_es(now: datetime) -> tuple[str, str]:
-    hora = now.strftime("%H:%M")
-    dia = f"{DIAS[now.weekday()]} {now.day} de {MESES[now.month - 1]} de {now.year}"
-    return hora, dia
 
 
 def _default_transport(url: str, payload: dict, timeout: float) -> dict:
@@ -80,7 +81,7 @@ class OllamaPlanner:
     def plan(self, text: str) -> list[Intent]:
         if not self.enabled:
             return []
-        hora, dia = _fecha_es(datetime.now())
+        now = datetime.now()
         payload = {
             "model": self.opts.get("model", "qwen2.5:3b"),
             "stream": False,
@@ -89,7 +90,8 @@ class OllamaPlanner:
             "messages": [
                 {"role": "system", "content": PROMPT.format(
                     names=self._names(), system=", ".join(sorted(SYSTEM_ACTIONS)),
-                    hora=hora, dia=dia)},
+                    tasks=", ".join(sorted(TASK_ACTIONS)),
+                    hora=hora_corta(now), dia=fecha_larga(now))},
                 {"role": "user", "content": text},
             ],
         }
@@ -143,6 +145,15 @@ class OllamaPlanner:
             elif kind == "system" and a.get("name") in SYSTEM_ACTIONS:
                 label = {"shutdown": "apagar la PC", "restart": "reiniciar la PC"}.get(a["name"], a["name"])
                 out.append(Intent(a["name"], label=label))
+            elif kind == "task" and a.get("name") in TASK_ACTIONS:
+                label = {"note_clear": "borrar todos los pendientes"}.get(a["name"], a["name"])
+                out.append(Intent(a["name"], label=label))
+            elif kind == "note_add" and isinstance(a.get("text"), str) and a["text"].strip():
+                texto = a["text"].strip()[:300]
+                out.append(Intent("note_add", texto, label=texto))
+            elif kind == "jobs":
+                perfil = a.get("profile") if isinstance(a.get("profile"), str) else ""
+                out.append(Intent("jobs", perfil.strip()[:40], label="empleos"))
             elif kind == "say" and isinstance(a.get("text"), str) and a["text"].strip():
                 out.append(Intent("say", a["text"].strip()[:300]))
         return out

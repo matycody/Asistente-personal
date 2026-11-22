@@ -1,6 +1,18 @@
 {
   "browser": "brave",
+
+  "_ayuda": "Escribí acá solo lo que quieras cambiar. Lo demás sale de los valores de fábrica (jarvis/config.py).",
+
+  "_ejemplo_apps": { "logo soft": "C:\\Program Files (x86)\\Siemens\\LOGOComfort\\LOGOComfort.exe" },
+  "_ejemplo_carpetas": { "tesis": "H:\\Facultad\\Tesis" },
+  "_ejemplo_cv": { "empleo": { "perfiles": { "programacion": { "cv": "H:\\CV\\cv-programacion.pdf" } } } },
+
   "apps": {},
   "folders": {},
-  "sites": {}
+  "sites": {},
+
+  "facultad": {
+    "sitios": [],
+    "carpetas": []
+  }
 }

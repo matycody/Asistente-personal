@@ -38,6 +38,16 @@ DRIVE_RE = re.compile(r"\b(?:disco|unidad|drive|particion)\s+(?:local\s+)?([a-z]
 
 FILLER_RE = re.compile(r"\b(?:por favor|porfa|porfis|quiero que|podes|podrias|ahora|dale)\b")
 
+NUMEROS = {"uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+           "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
+           "primero": 1, "segundo": 2, "tercero": 3}
+
+
+def _numero(token: str) -> int | None:
+    if token.isdigit():
+        return int(token)
+    return NUMEROS.get(token)
+
 
 def norm(text: str) -> str:
     text = unicodedata.normalize("NFD", text.lower())
@@ -110,6 +120,47 @@ def parse_one(segment: str, cfg: dict) -> Intent | None:
     s = re.sub(r"\s+", " ", s).strip()
     if not s:
         return None
+
+    # ---- tareas (van antes que "buscar", porque "buscá empleo" no es una búsqueda web) ----
+    if re.search(r"\b(?:buen dia|buenos dias|buenas tardes|buenas noches)\b", s) and len(s.split()) <= 4:
+        return Intent("brief", raw=s, label="el parte del día")
+    if re.search(r"\b(?:parte|resumen|reporte)\s+del\s+dia\b|\bcomo viene el dia\b|\bque tengo hoy\b", s):
+        return Intent("brief", raw=s, label="el parte del día")
+    if re.search(r"\bclima\b|\bque tiempo (?:hace|va a hacer)\b|\bva a llover\b|\btemperatura\b", s):
+        return Intent("weather", raw=s, label="el clima")
+    if re.match(r"^(?:que hora es|que hora|decime la hora|que dia es(?: hoy)?|que fecha es)$", s):
+        return Intent("time", raw=s, label="la hora")
+
+    m = re.match(r"^(?:anota|anotar|anotame|apunta|apuntame|recordame|agenda|agendame|"
+                 r"agrega|agregar|sumale?|sumar)\s+(?:a\s+(?:los\s+)?pendientes\s+)?(?:que\s+)?(.+)$", s)
+    if m:
+        texto = re.sub(r"\s+a\s+(?:los\s+)?pendientes$", "", m.group(1)).strip()
+        return Intent("note_add", texto, raw=s, label=texto)
+    if re.search(r"\b(?:borra|borrar|limpia|limpiar|vacia|vaciar|elimina|eliminar)\b.*\b(?:todos los |los )?pendientes\b", s):
+        return Intent("note_clear", raw=s, label="borrar todos los pendientes")
+    m = re.match(r"^(?:listo|marca|marcame|marcar|borra|borrar|saca|sacar|termine|complete)\s+"
+                 r"(?:el|la)?\s*(?:pendiente|punto|numero|item)?\s*(\w+)$", s)
+    if m:
+        n = _numero(m.group(1))
+        if n:
+            return Intent("note_done", str(n), raw=s, label=f"el pendiente {n}")
+    if re.search(r"\bpendientes?\b", s) and re.search(
+            r"^(?:que|cuales|cuantos|leeme|lee|decime|mostrame|mis|tengo)\b|^pendientes$", s):
+        return Intent("note_list", raw=s, label="los pendientes")
+
+    m = re.match(r"^(?:busca|buscar|buscame|conseguime|mostrame|abri|abrime|modo)\s+"
+                 r"(?:me\s+)?(?:las?\s+)?(?:busquedas?\s+de\s+)?(?:empleos?|trabajos?)"
+                 r"(?:\s+(?:de|para|en)\s+(.+))?$", s)
+    if m:
+        perfil = (m.group(1) or "").strip()
+        return Intent("jobs", perfil, raw=s, label=f"empleos de {perfil}" if perfil else "empleos")
+    if re.search(r"^(?:modo|abri|abrime|mostrame|entra a la?)\s+(?:la\s+)?(?:facu|facultad|universidad|cursada)$", s):
+        return Intent("study", raw=s, label="la facultad")
+
+    # Ojo: tiene que ser una orden explícita. "dejame navegar" NO es pedir silencio.
+    if re.search(r"\b(?:deja de escuchar|dejame en paz|dejame tranquilo|pausate|"
+                 r"ponete en pausa|silenciate|no me escuches|modo pausa)\b", s):
+        return Intent("pause_listening", raw=s, label="dejar de escuchar")
 
     # ---- sistema ----
     if re.search(r"\bvolumen\b", s):
